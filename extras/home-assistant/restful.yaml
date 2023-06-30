@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2023 John Romkey
+#
+# SPDX-License-Identifier: CC0-1.0
+
+sign_solar:
+  url: "http://{{ target }}/solar"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "sunset": {{ int(as_timestamp(states("sensor.sun_next_dusk")), 0) }}, "sunrise": {{ int(as_timestamp(states("sensor.sun_next_dawn"), 0)) }} }'
+
+sign_lunar:
+  url: "http://{{ target }}/lunar"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "phase": {{ lunar_phase }} }'
+
+sign_weather:
+  url: "http://{{ target }}/weather"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "conditions": {{ condition }}, "temperature":  {{ temperature }}, "humidity": {{ humidity }}, "pressure": {{ pressure }} }'
+
+sign_forecast:
+  url: "http://{{ target }}/forecast"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "conditions": "{{ condition  }}", "high": {{ high_temperature }}, "low": {{ low_temperature }} }'
+
+sign_uv:
+  url: "http://{{ target }}/uv"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "index": {{ uv_index }} }'
+
+sign_aqi:
+  url: "http://{{ target }}/aqi"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "aqi": {{ aqi }} }'
+
+sign_tones:
+  url: "http://{{ target }}/tones"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "tones": [ {{ tones }} ] }'
+
+sign_set_time:
+  url: "http://{{ target }}/set-time"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "time": {{ now() }} }'
+
+sign_message:
+  url: "http://{{ target }}/message"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "text": "{{ text }}", "color": {{ color }}  }'
+
+sign_greet:
+  url: "http://{{ target }}/greet"
+  method: "post"
+  content_type: "application/json"
+  payload: '{{ payload }}'
+
+sign_occupancy:
+  url: "http://{{ target }}/occupancy"
+  method: "post"
+  content_type: "application/json"
+  payload: '{ "occupancy": [ {{ payload }} ] }'

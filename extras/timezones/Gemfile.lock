@@ -1,0 +1,15 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    concurrent-ruby (1.2.2)
+    tzinfo (2.0.6)
+      concurrent-ruby (~> 1.0)
+
+PLATFORMS
+  arm64-darwin-22
+
+DEPENDENCIES
+  tzinfo
+
+BUNDLED WITH
+   2.4.12
