@@ -36,6 +36,10 @@ class Splash:
                 self._filename, bitmap=displayio.Bitmap, palette=displayio.Palette
             )
         except OSError:
+            self._app.logger.error("Splash: OSError")
+            return False
+        except NotImplementedError:
+            self._app.logger.error(f"Image {self._filename} unsupported")
             return False
 
         tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)

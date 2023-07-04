@@ -69,9 +69,11 @@ class Weather:
 
         group = displayio.Group()
 
+        image_filename = f"/assets/w/{weather['current']['conditions']}.bmp"
+
         try:
             bitmap, palette = adafruit_imageload.load(
-                f"/assets/w/{weather['current']['conditions']}.bmp",
+                image_filename,
                 bitmap=displayio.Bitmap,
                 palette=displayio.Palette,
             )
@@ -80,8 +82,11 @@ class Weather:
             group.append(tile_group)
         except OSError:
             print(
-                "weather conditions {weather['current']['conditions']}.bmp - file not found"
+                "weather conditions {image_filename} - file not found"
             )
+        except NotImplementedError:
+            self._app.logger.error(f"Image {image_filename} unsupported")
+            return False
 
         try:
             temp_text = adafruit_display_text.label.Label(
