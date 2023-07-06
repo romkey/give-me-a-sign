@@ -227,7 +227,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             "MAC address ",
             ":".join(
                 "%02x" % b for b in self.esp.MAC_address_actual # pylint: disable=consider-using-f-string,line-too-long
-            ),  
+            ),
         )
 
     # fmt: off

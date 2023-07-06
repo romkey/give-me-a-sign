@@ -25,6 +25,17 @@ import board
 import adafruit_esp32spi.adafruit_esp32spi_wsgiserver as http_server
 from http_server import SimpleWSGIApplication
 
+from aqi import AQI
+from clock import Clock
+from greet import Greet
+from image import Image
+from message import Message
+from pollen import Pollen
+from tones import Tones
+from trimet import Trimet
+from uv import UV
+from weather import Weather
+
 """
 Web server
 
@@ -39,19 +50,20 @@ class Server:
     """
 
     STORE_ENDPOINTS = [
-        "aqi",
+        AQI.KEY,
         "debug",
         "forecast",
-        "greet",
-        "image",
+        Greet.KEY,
+        Image.KEY,
         "lunar",
-        "message",
-        "pollen",
+        Message.KEY,
+        Pollen.KEY,
         "solar",
-        "tones",
-        "trimet",
-        "uv",
-        "weather",
+        Clock.KEY_TIMEZONE,
+        Tones.KEY,
+        Trimet.KEY,
+        UV.KEY,
+        Weather.KEY
     ]
 
     def __init__(self, app):
