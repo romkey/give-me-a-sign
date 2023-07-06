@@ -58,7 +58,7 @@ class Server:
         "lunar",
         Message.KEY,
         Pollen.KEY,
-        "solar",
+        Clock.KEY_SOLAR,
         Clock.KEY_TIMEZONE,
         Tones.KEY,
         Trimet.KEY,

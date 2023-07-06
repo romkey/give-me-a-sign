@@ -33,6 +33,7 @@ class Clock:
 
     KEY = "clock"
     KEY_TIMEZONE = "timezone"
+    KEY_SOLAR = "solar"
 
     DEFAULT_COLOR = 0x00FF00
 
@@ -159,7 +160,7 @@ class Clock:
 
         Depends on "solar" being set in Data
         """
-        solar = self._app.data.get_item("solar")
+        solar = self._app.data.get_item(Clock.KEY_SOLAR)
         if solar is None:
             return Clock.DEFAULT_COLOR
 
