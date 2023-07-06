@@ -14,7 +14,6 @@ give-me-a-sign/clock - clock module for LED Matrix display
 """
 
 import time
-import json
 
 import displayio
 from adafruit_bitmap_font import bitmap_font
@@ -31,7 +30,9 @@ class Clock:
     - calculates the current time considering the timezone offset
     - displays the current time on the LED matrix
     """
+
     KEY = "clock"
+    KEY_TIMEZONE = "timezone"
 
     DEFAULT_COLOR = 0x00FF00
 
@@ -111,18 +112,21 @@ class Clock:
 
         Caches the offset until the next transition.
 
-        Timezone offsets are stored in /assets/timezone-offsets.json
+        Timezone offsets are stored in Data under the key "timezone"
 
         They shoud be moved to Data with an endpoint to set them
         """
         now = time.time()
 
-        if self._timezone_cache_until != 0 and now < self._timezone_cache_until:
+        if (
+            self._timezone_cache_until != 0
+            and now < self._timezone_cache_until
+            or not self._app.data.has_item(Clock.KEY_TIMEZONE)
+        ):
             return
 
         try:
-            with open("/assets/timezone-offsets.json") as offsets_file:
-                self._timezone_breaks = json.load(offsets_file)
+            self._timezone_breaks = self._app.data.get_item(Clock.KEY_TIMEZONE)
 
             if len(self._timezone_breaks["transitions"]) == 0:
                 return
