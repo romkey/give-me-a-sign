@@ -25,5 +25,6 @@ while True:
             tb = sys.exception().__traceback__
             app.logger.error(tb)
             time.sleep(2)
+            microcontroller.reset()
         except Exception:  # pylint: disable=broad-exception-caught
             microcontroller.reset()
