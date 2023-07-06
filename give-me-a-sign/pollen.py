@@ -24,6 +24,8 @@ class Pollen:
     Pollen Count has just the count value
     """
 
+    KEY = "pollen"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -44,11 +46,11 @@ class Pollen:
            { "count": integer }
         """
 
-        pollen = self._app.data.get_item("pollen")
+        pollen = self._app.data.get_item(Pollen.KEY)
         if pollen is None:
             return False
 
-        self._app.data.clear_updated("pollen")
+        self._app.data.clear_updated(Pollen.KEY)
 
         line = adafruit_display_text.label.Label(
             terminalio.FONT, color=0x800080, text="Pollen " + str(int(pollen["pollen"]))

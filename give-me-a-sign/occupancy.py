@@ -17,13 +17,10 @@ import terminalio
 
 class Occupancy:
     """
-    Manages the display of UV Index on the sign.
-
-    The server receives UV Index values and stashes them in the Data store under the key "uv".
-    This class retrieves a message and displays it.
-
-    UV Index has just the index value
+    Manages display occupancy information about the space
     """
+
+    KEY = "occupancy"
 
     ROOM_UNIT1_FRONT = "1f"
     ROOM_UNIT1_BACK = "1b"
@@ -59,7 +56,8 @@ class Occupancy:
 
     def show(self) -> bool:
         """
-        Display the UV Index on the screen
+        Display a map of the space on the screen and indicates which areas
+        are currently registering occupancy
 
         The server receives index and stashes it in the Data store under the key "uv".
         This class retrieves index and displays it.
@@ -69,11 +67,11 @@ class Occupancy:
         .. code-block:: python
            { "index": integer }
         """
-        occupancy = self._app.data.get_item("occupancy")
+        occupancy = self._app.data.get_item(Occupancy.KEY)
         if occupancy is None:
             return False
 
-        self._app.data.clear_updated("occupancy")
+        self._app.data.clear_updated(Occupancy.KEY)
 
         line1 = adafruit_display_text.label.Label(
             terminalio.FONT, color=0xFF0000, text="Hello"

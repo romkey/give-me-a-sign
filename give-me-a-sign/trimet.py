@@ -25,6 +25,8 @@ class Trimet:
     line, the time, and an indication of the transportation type ("bus", "light rail", ...).
     """
 
+    KEY = "trimet"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -45,8 +47,8 @@ class Trimet:
            { "index": integer }
         """
 
-        trimet = self._app.data.get_item("trimet")
-        self._app.data.clear_updated("trimet")
+        trimet = self._app.data.get_item(Trimet.KEY)
+        self._app.data.clear_updated(Trimet.KEY)
 
         if trimet is None or trimet["index"] == 0:
             return False

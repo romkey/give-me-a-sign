@@ -26,6 +26,8 @@ class Greet:
     Greetings have structured
     """
 
+    KEY = "greet"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -48,14 +50,14 @@ class Greet:
         The person's name should be in the format "John R.", giving only the
         last initial and not the full name.
         """
-        if not self._app.data.is_updated("greet"):
+        if not self._app.data.is_updated(Greet.KEY):
             print("not updated")
             return False
 
-        self._app.data.clear_updated("greet")
+        self._app.data.clear_updated(Greet.KEY)
 
         try:
-            person = self._app.data.get_item("greet")["person"]
+            person = self._app.data.get_item(Greet.KEY)["person"]
         except KeyError:
             return False
 

@@ -26,6 +26,8 @@ class AQI:
     Air Quality Index has just the index value
     """
 
+    KEY = "aqi"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -45,11 +47,11 @@ class AQI:
         .. code-block:: python
            { "index": integer }
         """
-        aqi = self._app.data.get_item("aqi")
+        aqi = self._app.data.get_item(AQI.KEY)
         if aqi is None:
             return False
 
-        self._app.data.clear_updated("aqi")
+        self._app.data.clear_updated(AQI.KEY)
         index = int(aqi["aqi"])
 
         line = adafruit_display_text.label.Label(
