@@ -21,8 +21,16 @@ class Data:
     a key's valued has changed and the value's age
     """
 
+    SAVE_FILE = "/data.json"
+
+    KEY_DATA = "data"
+    KEY_UPDATED = "udpated"
+    KEY_LAST_UPDATED = "last_updated"
+
     def __init__(self):
         self._data = {}
+
+        self._restore()
 
     def has_item(self, key) -> bool:
         """True if the the key has a value, False otherwise"""
@@ -32,16 +40,18 @@ class Data:
         """Set the value of the item associated with key"""
         self._check_key(key)
 
-        self._data[key]["data"] = data
-        self._data[key]["updated"] = True
-        self._data[key]["last_updated"] = time.monotonic()
+        self._data[key][Data.KEY_DATA] = data
+        self._data[key][Data.KEY_UPDATED] = True
+        self._data[key][Data.KEY_LAST_UPDATED] = time.monotonic()
+
+        self._save()
 
     def get_item(self, key):
         """Get the value of the item associated with key, None if there is none"""
         self._check_key(key)
 
         try:
-            return self._data[key]["data"]
+            return self._data[key][Data.KEY_DATA]
         except KeyError:
             return None
 
@@ -49,12 +59,12 @@ class Data:
         """True if the dirty flag for key is set"""
         self._check_key(key)
 
-        return self._data[key]["updated"]
+        return self._data[key][Data.KEY_UPDATED]
 
     def last_updated(self, key) -> int:
         """Return the time the key's value last changed"""
         self._check_key(key)
-        return self._data[key]["last_updated"]
+        return self._data[key][Data.KEY_LAST_UPDATED]
 
     def age(self, key) -> int:
         """Return the age of the key's value"""
@@ -64,7 +74,7 @@ class Data:
         """Clear the dirty flag for the key"""
         self._check_key(key)
 
-        self._data[key]["updated"] = False
+        self._data[key][Data.KEY_UPDATED] = False
 
     def all(self) -> dict:
         """Returns the entire dictionary. Not really recommended, but used for debugging"""
@@ -79,24 +89,34 @@ class Data:
             return
 
         self._data[key] = {}
-        self._data[key]["last_updated"] = 0
-        self._data[key]["updated"] = False
+        self._data[key][Data.KEY_LAST_UPDATED] = 0
+        self._data[key][Data.KEY_UPDATED] = False
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         """
         Attempt to save all current data to flash as a JSON file
         """
-        storage.remount("/", False)
-        with open("/data.json", "w") as file:
+        try:
+            storage.remount("/", False)
+        except RuntimeError:
+            return False
+
+        with open(Data.SAVE_FILE, "w") as file:
             file.write(json.dumps(self._data))
 
-        print("saved!")
-
         storage.remount("/", True)
+        return True
 
-    def _restore(self) -> None:
+    def _restore(self) -> bool:
         """
         Attempt to restore data from a JSON file stored in flash
         """
-        with open("/data.json", "w") as file:
-            self._data = json.loads(file.read())
+        try:
+            with open(Data.SAVE_FILE, "r") as file:
+                self._data = json.loads(file.read())
+        except OSError:
+            return False
+        except json.decoder.JSONDecodeError:
+            return False
+
+        return True
