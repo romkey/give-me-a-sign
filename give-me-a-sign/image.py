@@ -18,6 +18,7 @@ class Image:
     Retrieve information about an image from Data
     Display the image at the correct location for the specified duration
     """
+    KEY = "image"
 
     def __init__(self, app):
         self._app = app
@@ -27,8 +28,8 @@ class Image:
         Get image info from Data, key "image"
         display it or return False to indicate there's nothing to do
         """
-        image = self._app.data.get_item("image")
-        self._app.data.clear_updated("image")
+        image = self._app.data.get_item(Image.KEY)
+        self._app.data.clear_updated(Image.KEY)
 
         try:
             if image is None or image["filename"] is None:

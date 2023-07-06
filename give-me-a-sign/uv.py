@@ -24,6 +24,8 @@ class UV:
     UV Index has just the index value
     """
 
+    KEY = "uv"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -44,8 +46,8 @@ class UV:
            { "index": integer }
         """
 
-        uvi = self._app.data.get_item("uv")
-        self._app.data.clear_updated("uv")
+        uvi = self._app.data.get_item(UV.KEY)
+        self._app.data.clear_updated(UV.KEY)
 
         if uvi is None or uvi["index"] == 0:
             return False

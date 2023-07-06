@@ -31,6 +31,7 @@ class Clock:
     - calculates the current time considering the timezone offset
     - displays the current time on the LED matrix
     """
+    KEY = "clock"
 
     DEFAULT_COLOR = 0x00FF00
 

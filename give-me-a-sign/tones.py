@@ -22,6 +22,8 @@ class Tones:
     Managing playing tones on a piezoelectric buzzer
     """
 
+    KEY = "tones"
+
     FULL_ON = 2**15
     FULL_OFF = 0
 
@@ -50,11 +52,11 @@ class Tones:
                  ]
         }
         """
-        self._tones = self._app.data.get_item("tones")
+        self._tones = self._app.data.get_item(Tones.KEY)
         if self._tones is None:
             return False
 
-        self._app.data.clear_updated("tones")
+        self._app.data.clear_updated(Tones.KEY)
 
         self._current_index = -1
         self._play_until = time.monotonic()

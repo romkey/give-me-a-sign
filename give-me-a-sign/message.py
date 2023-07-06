@@ -24,6 +24,8 @@ class Message:
     Messages have text and an RGB color.
     """
 
+    KEY = "message"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
@@ -48,16 +50,16 @@ class Message:
             }
         """
 
-        self._app.data.clear_updated("message")
+        self._app.data.clear_updated(Message.KEY)
 
         try:
             line = Label(
                 terminalio.FONT,
-                color=self._app.data.get_item("message")["color"],
-                text=self._app.data.get_item("message")["text"],
+                color=self._app.data.get_item(Message.KEY)["color"],
+                text=self._app.data.get_item(Message.KEY)["text"],
             )
         except KeyError:
-            print("message: bad data", self._app.data.get_item("message"))
+            print("message: bad data", self._app.data.get_item(Message.KEY))
             return False
 
         box = line.bounding_box

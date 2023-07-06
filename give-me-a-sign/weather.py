@@ -26,6 +26,8 @@ class Weather:
     forecast high and low, and an image indicating current conditions (sunny, cloudy, etc).
     """
 
+    KEY = "weather"
+
     def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
