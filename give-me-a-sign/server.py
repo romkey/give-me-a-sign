@@ -130,7 +130,7 @@ class Server:
 
         try:
             msg = json.loads(environ["wsgi.input"].getvalue())
-        except json.decoder.JSONDecodeError:
+        except ValueError:
             self._app.logger.error(
                 f'server:store_data({key}) store_data failed: {environ["wsgi.input"].getvalue()}'
             )
@@ -154,7 +154,7 @@ class Server:
 
         try:
             msg = json.loads(environ["wsgi.input"].getvalue())
-        except json.decoder.JSONDecodeError:
+        except ValueError:
             print("invalid JSON", environ["wsgi.input"].getvalue())
 
             self._app.logger.error(
