@@ -117,7 +117,7 @@ class Data:
                 self._data = json.loads(file.read())
         except OSError:
             return False
-        except json.decoder.JSONDecodeError:
+        except ValueError:  # raised when the contents of the file are invalid JSON
             return False
 
         return True
