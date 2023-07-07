@@ -85,7 +85,6 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self._setup_buttons()
         self._setup_rtc()
         self._setup_esp()
-        print(f"IP address {self.esp.pretty_ip(self.esp.ip_address)}")
 
         self.data = Data()
         self.logger = Logger.getLogger("default")
@@ -103,6 +102,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         splash = Splash(self, "/assets/wifi.bmp")
         splash.show()
         self._connect_wifi()
+        print(f"IP address {self.esp.pretty_ip(self.esp.ip_address)}")
 
         self.ip_screen = IP(self)  # pylint: disable=attribute-defined-outside-init
 
