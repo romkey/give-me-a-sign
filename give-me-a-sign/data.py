@@ -75,6 +75,7 @@ class Data:
         self._check_key(key)
 
         self._data[key][Data.KEY_UPDATED] = False
+        self._save()
 
     def all(self) -> dict:
         """Returns the entire dictionary. Not really recommended, but used for debugging"""
