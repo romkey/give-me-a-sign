@@ -1,0 +1,100 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LED Matrix Power Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+  </head>
+  <body>
+    <div class='container'>
+      <h1>LED Matrix Power Test</h1>
+
+      <div class='row'>
+      <div class='col-4'>
+
+      <div>
+	<h2>1. Choose % of the display</h2>
+	<p>
+	Choose a fraction of the screen to light up. Beware using
+	larger fractions of the screen on 5V USB power, you may easily
+	overwhelm the power supply. Use an external multi-amp power
+	adapter for those sizes. 
+	</p>
+	<p>
+	To estimate your display's power needs, multiply by the
+	appropriate amoung - by 10 if you chose 1/10, or 4 if you
+	chose 1/4.
+	</p>
+      </div>
+      
+      <select class="form-select" id="sizeSelect" aria-label="Color size">
+	<option selected value="10">1/10</option>
+	<option value="12.5">1/8</option>
+	<option value="25">1/4</option>
+	<option value="50">1/2 (danger!)</option>
+	<option value="100">1 (danger!)</option>
+      </select>
+      </div>
+
+      <div class='col-4'>
+      <div>
+	<h2>2. Choose 1/3, 2/3 or full power</h2>
+	<p>
+	Choose one, two or three colors to test power levels at 1/3 (33%),
+	2/3 (66%) or 3/3 (100%).
+	</p>
+	<p>
+	Leave all three off to estimate the amount of power that the
+	controller managing the LED matrix needs.
+	</p>
+	<p>
+	If you choose all three colors at 1/10 of the display and
+	multiply the power needed by 10 you should have a good
+	estimate of the worst case maximum power the display will ever need.
+	</p>
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" value="" id="flexCheckRed">
+        <label class="form-check-label" for="flexCheckRed">
+          Red
+        </label>
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" value="" id="flexCheckGreen">
+        <label class="form-check-label" for="flexCheckGreen">
+	  Green
+        </label>
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" value="" id="flexCheckBlue">
+        <label class="form-check-label" for="flexCheckBlue">
+          Blue
+        </label>
+      </div>
+      </div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js" integrity="sha512-3gJwYpMe3QewGELv8k/BX9vcqhryRdzRMxVfq6ngyWXwo03GFEzjsUm8Q7RZcHPHksttq7/GFoxjCVUjkjvPdw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+    $( document ).ready(function() {
+      $("select,input").on("change", function() {
+        $.ajax("/update", {
+          data: JSON.stringify({
+            red: $("#flexCheckRed").is(":checked"),
+            green: $("#flexCheckGreen").is(":checked"),
+            blue: $("#flexCheckBlue").is(":checked"),
+            size: $("#sizeSelect").val(),
+           }),
+           method: "POST",
+           headers: {contentType: 'application/json; charset=utf-8'}
+        });
+      });
+    });
+    </script>
+  </body>
+</html>
