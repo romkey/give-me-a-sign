@@ -123,7 +123,9 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             self, NTP_SOCKET_NUMBER
         )
 
-        self.logger.addHandler(SyslogUDPHandler(self, secrets["syslogger"]))
+        if "syslogger" in secrets:
+            self.logger.addHandler(SyslogUDPHandler(self, secrets["syslogger"]))
+
         self.logger.info("Syslogger set up")
 
         self.server = Server(self)  # pylint: disable=attribute-defined-outside-init
