@@ -84,7 +84,7 @@ class Weather:
             group.append(tile_group)
         except OSError:
             print(
-                "weather conditions {image_filename} - file not found"
+                f"weather conditions {image_filename} - file not found"
             )
         except NotImplementedError:
             self._app.logger.error(f"Image {image_filename} unsupported")
