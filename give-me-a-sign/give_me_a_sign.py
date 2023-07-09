@@ -306,7 +306,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self._loop_state == States.WEATHER:
             if (
                 self._is_time_up()
-                or self.data.age(Weather.KEY) < 60 * 60
+                or self.data.age(Weather.KEY) > 60 * 60
                 or not self.weather.show()
             ):
                 self._next_up(States.AQI, 10)
@@ -316,7 +316,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self._loop_state == States.AQI:
             if (
                 self._is_time_up()
-                or self.data.age(AQI.KEY) < 60 * 60
+                or self.data.age(AQI.KEY) > 60 * 60
                 or not self.aqi.show()
             ):
                 self._next_up(States.UVI, 10)
@@ -328,7 +328,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                 self._next_up(States.CLOCK, 20)
             elif (
                 self._is_time_up()
-                or self.data.age(UV.KEY) < 60 * 60
+                or self.data.age(UV.KEY) > 60 * 60
                 or not self.uv_index.show()
             ):
                 self._next_up(States.CLOCK, 20)
@@ -338,7 +338,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self._loop_state == States.POLLEN:
             if (
                 self._is_time_up()
-                or self.data.age(Pollen.KEY) < 60 * 60
+                or self.data.age(Pollen.KEY) > 60 * 60
                 or not self.pollen.show()
             ):
                 self._next_up(States.CLOCK, 10)
