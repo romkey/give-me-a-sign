@@ -24,7 +24,7 @@ class Data:
     SAVE_FILE = "/data.json"
 
     KEY_DATA = "data"
-    KEY_UPDATED = "udpated"
+    KEY_UPDATED = "updated"
     KEY_LAST_UPDATED = "last_updated"
 
     def __init__(self):
