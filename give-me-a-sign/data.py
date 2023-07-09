@@ -24,7 +24,7 @@ class Data:
     SAVE_FILE = "/data.json"
 
     KEY_DATA = "data"
-    KEY_UPDATED = "udpated"
+    KEY_UPDATED = "updated"
     KEY_LAST_UPDATED = "last_updated"
 
     def __init__(self):
@@ -42,7 +42,7 @@ class Data:
 
         self._data[key][Data.KEY_DATA] = data
         self._data[key][Data.KEY_UPDATED] = True
-        self._data[key][Data.KEY_LAST_UPDATED] = time.monotonic()
+        self._data[key][Data.KEY_LAST_UPDATED] = time.time()
 
         self._save()
 
