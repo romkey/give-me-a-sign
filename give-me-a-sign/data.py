@@ -42,7 +42,7 @@ class Data:
 
         self._data[key][Data.KEY_DATA] = data
         self._data[key][Data.KEY_UPDATED] = True
-        self._data[key][Data.KEY_LAST_UPDATED] = time.monotonic()
+        self._data[key][Data.KEY_LAST_UPDATED] = time.time()
 
         self._save()
 
