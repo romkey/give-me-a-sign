@@ -19,8 +19,11 @@ import rtc
 
 from adafruit_esp32spi import adafruit_esp32spi
 from adafruit_matrixportal.matrix import Matrix
-from adafruit_debouncer import Debouncer
+from adafruit_debouncer import Button
 import adafruit_logging as Logger
+import adafruit_display_text.label
+import displayio
+import terminalio
 
 from data import Data
 from syslogger import SyslogUDPHandler
@@ -148,12 +151,12 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         pin = digitalio.DigitalInOut(board.BUTTON_UP)
         pin.direction = digitalio.Direction.INPUT
         pin.pull = digitalio.Pull.UP
-        self.button1 = Debouncer(pin)
+        self.button1 = Button(pin)
 
         pin = digitalio.DigitalInOut(board.BUTTON_DOWN)
         pin.direction = digitalio.Direction.INPUT
         pin.pull = digitalio.Pull.UP
-        self.button2 = Debouncer(pin)
+        self.button2 = Button(pin)
 
     def _setup_rtc(self):
         """
@@ -255,6 +258,36 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         if self.data.is_updated(Tones.KEY):
             self.tones.play()
+
+        if self.button1.long_press:
+            msg = "halted"
+            self.logger.info(msg)
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=0xFF0000, text=msg
+                )
+            line.y = self.display.height // 2
+        
+            group = displayio.Group()
+            group.append(line)
+            self.display.show(group)
+
+            while True:
+                pass
+
+        if self.button2.long_press:
+            msg = "restart"
+            self.logger.info(msg)
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=0xFF0000, text=msg
+                )
+            line.y = self.display.height // 2
+
+            group = displayio.Group()
+            group.append(line)
+            self.display.show(group)
+
+            time.sleep(2)
+            microcontroller.reset()
 
         if not self.button1.value:
             self.ip_screen.show()
