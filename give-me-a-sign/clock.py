@@ -62,14 +62,18 @@ class Clock:
         self._timezone_cache_until = 0
         self._timezone_cached_offset = 0
 
-    def update_time(self):
-        """Updates the display with the current time; blinks the colon once per second"""
-        self._clock_label.color = self._calculate_color(time.time())
+    def clock(self, label) -> None:
+        """Put the clock into the given label"""
+        label.color = self._calculate_color(time.time())
         now = time.localtime(self.get_local_time())
 
         colon = ":" if now[5] % 2 else " "
 
-        self._clock_label.text = f"{now[3]}{colon}{now[4]:02d}"
+        label.text = f"{now[3]}{colon}{now[4]:02d}"
+
+    def update_time(self):
+        """Updates the display with the current time; blinks the colon once per second"""
+        self.clock(self._clock_label)
 
         # returns [x, y, width, height]
         bb_width = self._clock_label.bounding_box[2]
@@ -77,6 +81,16 @@ class Clock:
         self._clock_label.x = round(self._app.display.width / 2 - bb_width / 2)
         self._clock_label.y = self._app.display.height // 2
         self._app.display.show(self._group)
+
+    def mini_clock(self) -> Label:
+        """ Create and return a label with the current time rendered into it in a small font"""
+        font = bitmap_font.load_font("/assets/fonts/intelone-mono-font-family-regular-6.bdf")
+#        font = bitmap_font.load_font("/assets/fonts/Segment7Standard.bdf")
+        label = Label(font)
+
+        self.clock(label)
+
+        return label
 
     def loop(self):
         """
