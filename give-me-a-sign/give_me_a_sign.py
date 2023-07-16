@@ -346,11 +346,13 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
             return
 
+        mini_clock = self.clock.mini_clock()
+
         if self._loop_state == States.AQI:
             if (
                 self._is_time_up()
                 or self.data.age(AQI.KEY) > 60 * 60
-                or not self.aqi.show()
+                or not self.aqi.show(mini_clock)
             ):
                 self._next_up(States.UVI, 10)
 
@@ -362,7 +364,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             elif (
                 self._is_time_up()
                 or self.data.age(UV.KEY) > 60 * 60
-                or not self.uv_index.show()
+                or not self.uv_index.show(mini_clock)
             ):
                 self._next_up(States.CLOCK, 20)
 
@@ -372,7 +374,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             if (
                 self._is_time_up()
                 or self.data.age(Pollen.KEY) > 60 * 60
-                or not self.pollen.show()
+                or not self.pollen.show(mini_clock)
             ):
                 self._next_up(States.CLOCK, 10)
 

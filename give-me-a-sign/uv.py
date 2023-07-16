@@ -33,7 +33,7 @@ class UV:
 
         self._app = app
 
-    def show(self) -> bool:
+    def show(self, mini_clock) -> bool:
         """
         Display the UV Index on the screen
 
@@ -66,6 +66,12 @@ class UV:
 
         group = displayio.Group()
         group.append(line)
+
+        mini_clock_width = mini_clock.bounding_box[2]
+        mini_clock.x = 64 - mini_clock_width
+        mini_clock.y = 2
+        group.append(mini_clock)
+
         self._app.display.show(group)
 
         return True
