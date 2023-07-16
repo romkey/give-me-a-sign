@@ -24,6 +24,7 @@ import adafruit_logging as Logger
 import adafruit_display_text.label
 import displayio
 import terminalio
+import os
 
 from data import Data
 from syslogger import SyslogUDPHandler
@@ -40,17 +41,11 @@ from uv import UV
 from aqi import AQI
 from pollen import Pollen
 
-try:
-    from secrets import secrets
-except ImportError:
-    print("WiFi secrets are kept in secrets.py, please add them there!")
-    raise
 
 HTTP_SERVER_SOCKET_NUMBER = 0
 NTP_SOCKET_NUMBER = 1
 FREE_MEMORY_LIMIT = 10000
 DEBUG = True
-
 
 class States:  # pylint: disable=too-few-public-methods
     """
@@ -127,10 +122,12 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             self, NTP_SOCKET_NUMBER
         )
 
-        if "syslogger" in secrets:
-            self.logger.addHandler(SyslogUDPHandler(self, secrets["syslogger"]))
-
-        self.logger.info("Syslogger set up")
+        syslogger = os.getenv("syslogger")
+        if syslogger is not None:
+            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
+            self.logger.info("Syslogger set up")
+        else:
+            self.logger.info("No syslogger")
 
         self.server = Server(self)  # pylint: disable=attribute-defined-outside-init
         self.server.start()
@@ -216,8 +213,15 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         This seems to mysteriously fail often.
         """
+        ssid = os.getenv("wifi_ssid")
+        password = os.getenv("wifi_password")
+
+        if ssid is None or password is None:
+            print("wifi_ssid or wifi_password not set in secrets.toml")
+            return
+
         try:
-            self.esp.connect(secrets)
+            self.esp.connect({ "ssid": ssid, "password": password })
         except ConnectionError:
             print("wifi failure")
             print("scanning...")
