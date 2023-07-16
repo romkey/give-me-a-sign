@@ -1,0 +1,4 @@
+wifi_ssid="YOUR WIFI SSID"
+wifi_password="YOUR WIFI PASSWORD"
+syslogger="SYSLOG-SERVER-IP"
+anonymous_greetings="Person A.,Person B."

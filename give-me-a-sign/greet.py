@@ -9,12 +9,10 @@ give-me-a-sign/greet - greeter module for LED Matrix display
 * Author: John Romkey
 """
 
-from secrets import secrets  # pylint: disable=no-name-in-module
-
 import adafruit_display_text.label
 import displayio
 import terminalio
-
+import os
 
 class Greet:
     """
@@ -66,12 +64,10 @@ class Greet:
 
         greet_msg = "Welcome"
 
-        try:
-            if person in secrets["anonymous_greetings"]:
-                greet_msg = "Hi totally"
-                names[0] = "human being"
-        except KeyError:
-            pass
+        anonymize = os.getenv("anonymous_greetings")
+        if anonymize is not None and person in anonymize.split(","):
+            greet_msg = "Hi totally"
+            names[0] = "human being"
 
         line1 = adafruit_display_text.label.Label(
             terminalio.FONT, color=0x00FF00, text=greet_msg
