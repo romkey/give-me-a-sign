@@ -84,6 +84,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self.matrix = Matrix()
         self.display = self.matrix.display
+        self.display.root_group = None
 
         self._setup_buttons()
         self._setup_rtc()
