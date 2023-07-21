@@ -46,14 +46,14 @@ class Data:
 
         self._save()
 
-    def get_item(self, key):
+    def get_item(self, key, default = None):
         """Get the value of the item associated with key, None if there is none"""
         self._check_key(key)
 
         try:
             return self._data[key][Data.KEY_DATA]
         except KeyError:
-            return None
+            return default
 
     def is_updated(self, key) -> bool:
         """True if the dirty flag for key is set"""
