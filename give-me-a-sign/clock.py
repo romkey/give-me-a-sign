@@ -21,7 +21,6 @@ from adafruit_display_text.label import Label
 
 from ntp import NTP
 
-
 class Clock:
     """
     Clock class
@@ -32,20 +31,18 @@ class Clock:
     """
 
     KEY = "clock"
+    NTP_KEY = "ntp"
     KEY_TIMEZONE = "timezone"
     KEY_SOLAR = "solar"
 
     DEFAULT_COLOR = 0x00FF00
 
-    def __init__(self, app, ntp_socket_number):
+    def __init__(self, app):
         """
         :param app: the GiveMeASign object this belongs to
         :param ntp_socket_number: the socket number for use by the NTP client
         """
         self._app = app
-
-        self._ntp_socket_number = ntp_socket_number
-        self._ntp = NTP(app.esp, app.rtc)
 
         self._group = displayio.Group()
 
@@ -53,8 +50,8 @@ class Clock:
         self._clock_label = Label(font)
         self._group.append(self._clock_label)
 
-        self._ntp.update()
-        self._last_ntp_check = time.time()
+        self._last_ntp_check = None
+        self._ntp_update()
 
         self._last_update_time = None
 
@@ -101,7 +98,7 @@ class Clock:
         """
         if self._last_ntp_check is None or time.time() > self._last_ntp_check + 60:
             print("NTP update")
-            self._ntp.update()
+            self._ntp_update()
             self._last_ntp_check = time.time()
 
         # one clock update per second
@@ -222,3 +219,15 @@ class Clock:
             return True
         except KeyError:
             return False
+
+    def _ntp_update(self) -> None:
+        if(self._last_ntp_check is not None
+               and
+               time.time() - self._last_ntp_check < self._app.data.get_item(Clock.NTP_KEY, "refresh_interval")):
+            return
+
+        ntp = NTP(self._app.esp, self._app.data.get_item(Clock.NTP_KEY, "server"))
+        t = ntp.update()
+        if t is not None:
+            self._last_ntp_check = time.time()
+            self._app.rtc.datetime = t

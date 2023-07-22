@@ -17,10 +17,9 @@ import adafruit_esp32spi.adafruit_esp32spi_socket as socket
 
 TIMEOUT = 5
 
-HOST = "pool.ntp.org"
+DEFAULT_SERVER = "pool.ntp.org"
 PORT = 123
 NTP_TO_UNIX_EPOCH = 2208988800  # 1970-01-01 00:00:00
-
 
 class NTP:
     """
@@ -29,16 +28,9 @@ class NTP:
     to this application.
     """
 
-    def __init__(self, esp, rtc, socket_number=0):
+    def __init__(self, esp, server = DEFAULT_SERVER):
         self._esp = esp
-        self._rtc = rtc
-
-        socket.set_interface(esp)
-        self._socketaddr = socket.getaddrinfo(HOST, PORT)[0][4]
-        self._s = socket.socket(type=socket.SOCK_DGRAM, socknum=socket_number)
-
-        self._s.settimeout(TIMEOUT)
-        self._s.connect(self._socketaddr, conntype=self._esp.UDP_MODE)
+        self._server = server
 
     def update(self) -> None:
         """
@@ -54,18 +46,29 @@ class NTP:
             packet[i] = 0
 
         try:
-            self._s.close()
-            self._s.connect(self._socketaddr, conntype=self._esp.UDP_MODE)
-            self._s.send(packet)
-        except ConnectionError:
-            print("NTP connect fail")
-            return
+            socket.set_interface(self._esp)
+            socketaddr = socket.getaddrinfo(self._server, PORT)[0][4]
+            s = socket.socket(type=socket.SOCK_DGRAM)
 
-        packet = self._s.recv(48)
-        if len(packet) != 48:
-            print("NTP fail ", len(packet))
-            return
+            s.settimeout(TIMEOUT)
+            s.connect(socketaddr, conntype=self._esp.UDP_MODE)
+            s.send(packet)
+
+            packet = s.recv(48)
+            if len(packet) != 48:
+                print("NTP fail ", len(packet))
+                return None
+
+        except BrokenPipeError as e:
+            print("NTP broken pipe", e)
+            return None
+
+        except ConnectionError as e:
+            print("NTP connection", e)
+            return None
+
 
         seconds = struct.unpack_from("!I", packet, offset=len(packet) - 8)[0]
-        self._rtc.datetime = time.localtime(seconds - NTP_TO_UNIX_EPOCH)
-        print("NTP time:", self._rtc.datetime)
+        t = time.localtime(seconds - NTP_TO_UNIX_EPOCH)
+        print("NTP time:", t)
+        return t
