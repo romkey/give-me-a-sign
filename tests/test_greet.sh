@@ -7,5 +7,5 @@
 
 curl -X POST -H "Content-Type: application/json" -d '{ "person": "Random X Hacker", "door": "front" }' "http://$IP/greet"
 sleep 20
-curl -X POST -H "Content-Type: application/json" -d '{ "person": "John R.", "door": "front" }' "http://$IP/greet"
+curl -X POST -H "Content-Type: application/json" -d '{ "person": "Person A.", "door": "front" }' "http://$IP/greet"
 sleep 20
