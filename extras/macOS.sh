@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 John Romkey
+#
+# SPDX-License-Identifier: MIT
+
 # https://learn.adafruit.com/welcome-to-circuitpython/troubleshooting
 
 mdutil -i off /Volumes/CIRCUITPY

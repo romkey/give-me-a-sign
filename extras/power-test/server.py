@@ -22,6 +22,7 @@ import adafruit_esp32spi.adafruit_esp32spi_wsgiserver as http_server
 
 from http_server import SimpleWSGIApplication
 
+
 class Server:
     """
     Mostly handlers for routes
@@ -34,19 +35,20 @@ class Server:
         self._app = app
         self._display = app.display
         self._web_app = SimpleWSGIApplication()
-        self._position = { "x": 0, "y": 0 }
-        self._size = .10
-        self._colors = { "red": 0, "green": 0, "blue": 0 }
+        self._position = {"x": 0, "y": 0}
+        self._size = 0.10
+        self._colors = {"red": 0, "green": 0, "blue": 0}
 
     def start(self) -> None:
         """
         Start the server - set all the routes and set up the web server
         """
-        self._web_app.on("GET", "/", lambda environment: self._web_app.serve_file("/index.html"))
-        self._web_app.on("POST",
-                             "/update",
-                    lambda environment: Server.update(self, environment)
-                )
+        self._web_app.on(
+            "GET", "/", lambda environment: self._web_app.serve_file("/index.html")
+        )
+        self._web_app.on(
+            "POST", "/update", lambda environment: Server.update(self, environment)
+        )
 
         http_server.set_interface(self._app.esp)
         # nofmt
@@ -96,7 +98,7 @@ class Server:
         group = displayio.Group()
 
         size = float(msg["size"])
-        width = int(self._display.width*size/100)
+        width = int(self._display.width * size / 100)
         height = self._display.height
         print(width, height)
 

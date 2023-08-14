@@ -63,7 +63,7 @@ class Server:
         Tones.KEY,
         Trimet.KEY,
         UV.KEY,
-        Weather.KEY
+        Weather.KEY,
     ]
 
     def __init__(self, app):
@@ -251,11 +251,13 @@ class Server:
             "wifi": {
                 "ssid": self._app.esp.ssid.decode(),
                 "bssid": ":".join(
-                    "%02x" % b for b in self._app.esp.bssid   # pylint: disable=consider-using-f-string
+                    "%02x" % b
+                    for b in self._app.esp.bssid  # pylint: disable=consider-using-f-string
                 ),
                 "rssi": self._app.esp.rssi,
                 "mac": ":".join(
-                    "%02x" % b for b in self._app.esp.MAC_address_actual   # pylint: disable=consider-using-f-string
+                    "%02x" % b
+                    for b in self._app.esp.MAC_address_actual  # pylint: disable=consider-using-f-string
                 ),
                 "ip": self._app.esp.pretty_ip(self._app.esp.ip_address),
             },

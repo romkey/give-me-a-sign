@@ -11,9 +11,11 @@ give-me-a-sign/give-me-a-sign - application module for LED Matrix display
 
 import time
 import gc
+import os
 import board
 import displayio
 import digitalio
+import terminalio
 import microcontroller
 import rtc
 
@@ -22,9 +24,6 @@ from adafruit_matrixportal.matrix import Matrix
 from adafruit_debouncer import Button
 import adafruit_logging as Logger
 import adafruit_display_text.label
-import displayio
-import terminalio
-import os
 
 from data import Data
 from syslogger import SyslogUDPHandler
@@ -46,6 +45,7 @@ HTTP_SERVER_SOCKET_NUMBER = 0
 NTP_SOCKET_NUMBER = 1
 FREE_MEMORY_LIMIT = 10000
 DEBUG = True
+
 
 class States:  # pylint: disable=too-few-public-methods
     """
@@ -221,7 +221,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             return
 
         try:
-            self.esp.connect({ "ssid": ssid, "password": password })
+            self.esp.connect({"ssid": ssid, "password": password})
         except ConnectionError:
             print("wifi failure")
             print("scanning...")
@@ -236,7 +236,8 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         print(
             "MAC address ",
             ":".join(
-                "%02x" % b for b in self.esp.MAC_address_actual # pylint: disable=consider-using-f-string,line-too-long
+                "%02x" % b
+                for b in self.esp.MAC_address_actual  # pylint: disable=consider-using-f-string,line-too-long
             ),
         )
 
@@ -271,7 +272,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                 terminalio.FONT, color=0xFF0000, text=msg
                 )
             line.y = self.display.height // 2
-        
+
             group = displayio.Group()
             group.append(line)
             self.display.show(group)
@@ -379,7 +380,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             if (
                 self._is_time_up()
                 or self.data.age(Pollen.KEY) > 60 * 60
-                or not self.pollen.show(mini_clock)
+                or not self.pollen.show(mini_clock)  # pylint: disable=too-many-function-args
             ):
                 self._next_up(States.CLOCK, 10)
 

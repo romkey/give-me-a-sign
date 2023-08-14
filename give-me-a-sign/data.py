@@ -10,9 +10,10 @@ give-me-a-sign/data - data storage for LED Matrix display
 """
 
 import time
+import gc
 import json
 import storage
-import gc
+
 
 class Data:
     """
@@ -46,7 +47,7 @@ class Data:
 
         self._save()
 
-    def get_item(self, key, default = None):
+    def get_item(self, key, default=None):
         """Get the value of the item associated with key, None if there is none"""
         self._check_key(key)
 

@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 import time
+import traceback
 import board
 import microcontroller
 import supervisor
-import traceback
 
 from give_me_a_sign import GiveMeASign
 
@@ -26,10 +26,10 @@ app.start()
 while True:
     try:
         app.loop()
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except Exception as outer_exception:  # pylint: disable=broad-exception-caught
         try:
-            print("General Exception 1", traceback.format_exception(e))
-            app.logger.error(traceback.format_exception(e))
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print("General Exception 2", traceback.format_exception(e))
+            print("General Exception 1", traceback.format_exception(outer_exception))
+            app.logger.error(traceback.format_exception(outer_exception))
+        except Exception as inner_exception:  # pylint: disable=broad-exception-caught
+            print("General Exception 2", traceback.format_exception(inner_exception))
             microcontroller.reset()

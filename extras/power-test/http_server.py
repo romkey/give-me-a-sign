@@ -13,6 +13,7 @@ side of things.
 
 import os
 
+
 class SimpleWSGIApplication:
     """
     An example of a simple WSGI Application that supports

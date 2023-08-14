@@ -47,7 +47,7 @@ index = 0
 print(os.listdir("/assets/fonts"))
 
 files = [file for file in os.listdir("/assets/fonts") if file[0] != "."]
-#files = [file for file in os.listdir("/assets/fonts") if file[1] != "." and file[:-4] == ".bdf"]
+# files = [file for file in os.listdir("/assets/fonts") if file[1] != "." and file[:-4] == ".bdf"]
 
 print("files", files)
 files.sort()
@@ -77,7 +77,9 @@ while True:
         print(index, files[index])
 
         font = bitmap_font.load_font(f"/assets/fonts/{files[index]}")
-        label = ScrollingLabel(font, text=TEXT, max_characters = len(TEXT), animate_time = 0.5 )
+        label = ScrollingLabel(
+            font, text=TEXT, max_characters=len(TEXT), animate_time=0.5
+        )
         label.y = 10
         display.root_group = label
         draw = False
