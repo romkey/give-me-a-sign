@@ -12,7 +12,7 @@ give-me-a-sign/data - data storage for LED Matrix display
 import time
 import json
 import storage
-
+import gc
 
 class Data:
     """
@@ -74,6 +74,9 @@ class Data:
         """Clear the dirty flag for the key"""
         self._check_key(key)
 
+        if not self._data[key][Data.KEY_UPDATED]:
+            return
+
         self._data[key][Data.KEY_UPDATED] = False
         self._save()
 
@@ -102,8 +105,12 @@ class Data:
         except RuntimeError:
             return False
 
+        gc.collect()
+
         with open(Data.SAVE_FILE, "w") as file:
             file.write(json.dumps(self._data))
+
+        gc.collect()
 
         storage.remount("/", True)
         return True
