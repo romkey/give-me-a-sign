@@ -99,7 +99,7 @@ class Clock:
         - call NTP if needed
         - update the display if needed (once per second)
         """
-        if self._last_ntp_check is None or time.time() > self._last_ntp_check + 60:
+        if self._last_ntp_check is None or time.time() > self._last_ntp_check + 60*60*3:
             print("NTP update")
             self._ntp.update()
             self._last_ntp_check = time.time()
