@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2023 John Romkey
+
+SPDX-License-Identifier: MIT
+-->
+
 # Fonts
 
 https://learn.adafruit.com/custom-fonts-for-pyportal-circuitpython-display/use-otf2bdf
