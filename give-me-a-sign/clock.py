@@ -21,6 +21,7 @@ from adafruit_display_text.label import Label
 
 from ntp import NTP
 
+
 class Clock:
     """
     Clock class
@@ -31,10 +32,11 @@ class Clock:
     """
 
     KEY = "clock"
-    NTP_KEY = "ntp"
+    KEY_NTP = "ntp"
     KEY_TIMEZONE = "timezone"
     KEY_SOLAR = "solar"
 
+    DEFAULT_NTP_REFRESH_INTERVAL = 60 * 60 * 6
     DEFAULT_COLOR = 0x00FF00
 
     def __init__(self, app):
@@ -226,13 +228,33 @@ class Clock:
             return False
 
     def _ntp_update(self) -> None:
-        if(self._last_ntp_check is not None
-               and
-               time.time() - self._last_ntp_check < self._app.data.get_item(Clock.NTP_KEY, "refresh_interval")):
+        ntp_data = self._app.data.get_item(
+            Clock.KEY_NTP,
+            {
+                "refresh_interval": Clock.DEFAULT_NTP_REFRESH_INTERVAL,
+                "server": "pool.ntp.org",
+            },
+        )
+
+        try:
+            refresh_interval = ntp_data["refresh_interval"]
+        except KeyError:
+            refresh_interval = Clock.DEFAULT_NTP_REFRESH_INTERVAL
+
+        if (
+            self._last_ntp_check is not None
+            and refresh_interval != 0
+            and time.time() - self._last_ntp_check < refresh_interval
+        ):
             return
 
-        ntp = NTP(self._app.esp, self._app.data.get_item(Clock.NTP_KEY, "server"))
-        t = ntp.update()
-        if t is not None:
+        try:
+            server = ntp_data["server"]
+            ntp = NTP(self._app.esp, server)
+        except KeyError:
+            ntp = NTP(self._app.esp)
+
+        updated_time = ntp.update()
+        if updated_time is not None:
             self._last_ntp_check = time.time()
-            self._app.rtc.datetime = t
+            self._app.rtc.datetime = updated_time
