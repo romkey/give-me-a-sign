@@ -83,7 +83,8 @@ class Power:
         print(
             "MAC address ",
             ":".join(
-                "%02x" % b for b in self.esp.MAC_address_actual # pylint: disable=consider-using-f-string,line-too-long
+                "%02x" % b
+                for b in self.esp.MAC_address_actual  # pylint: disable=consider-using-f-string,line-too-long
             ),
         )
 

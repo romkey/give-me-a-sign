@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2023 John Romkey
+#
+# SPDX-License-Identifier: CC0-1.0
+
+adafruit_bitmap_font
+adafruit_debouncer
+adafruit_display_text
+adafruit_esp32spi
+adafruit_matrixportal

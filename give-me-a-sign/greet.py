@@ -9,10 +9,11 @@ give-me-a-sign/greet - greeter module for LED Matrix display
 * Author: John Romkey
 """
 
+import os
 import adafruit_display_text.label
 import displayio
 import terminalio
-import os
+
 
 class Greet:
     """

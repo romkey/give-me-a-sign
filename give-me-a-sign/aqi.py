@@ -60,7 +60,6 @@ class AQI:
         line.x = 0
         line.y = 12
 
-        
         group = displayio.Group()
         group.append(line)
 

@@ -18,6 +18,7 @@ class Image:
     Retrieve information about an image from Data
     Display the image at the correct location for the specified duration
     """
+
     KEY = "image"
 
     def __init__(self, app):

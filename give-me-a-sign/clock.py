@@ -80,9 +80,11 @@ class Clock:
         self._app.display.show(self._group)
 
     def mini_clock(self) -> Label:
-        """ Create and return a label with the current time rendered into it in a small font"""
-        font = bitmap_font.load_font("/assets/fonts/intelone-mono-font-family-regular-6.bdf")
-#        font = bitmap_font.load_font("/assets/fonts/Segment7Standard.bdf")
+        """Create and return a label with the current time rendered into it in a small font"""
+        font = bitmap_font.load_font(
+            "/assets/fonts/intelone-mono-font-family-regular-6.bdf"
+        )
+        #        font = bitmap_font.load_font("/assets/fonts/Segment7Standard.bdf")
         label = Label(font)
 
         self.clock(label)
@@ -96,7 +98,10 @@ class Clock:
         - call NTP if needed
         - update the display if needed (once per second)
         """
-        if self._last_ntp_check is None or time.time() > self._last_ntp_check + 60:
+        if (
+            self._last_ntp_check is None
+            or time.time() > self._last_ntp_check + 60 * 60 * 3
+        ):
             print("NTP update")
             self._ntp_update()
             self._last_ntp_check = time.time()

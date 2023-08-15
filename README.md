@@ -35,7 +35,7 @@ Two important questions arise:
    device.
 2. If the device is not intended to be stand-alone then where is the
    most appropriate place to put different functions?
-   
+
 Give Me A Sign! is not intended to run stand-alone. Its clock function
 can but the biggest design decision here is to use an external source
 (or sources) to push information to the sign rather than have it pull
