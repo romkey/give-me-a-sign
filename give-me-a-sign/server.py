@@ -60,6 +60,7 @@ class Server:
         Pollen.KEY,
         Clock.KEY_SOLAR,
         Clock.KEY_TIMEZONE,
+        Clock.KEY_NTP,
         Tones.KEY,
         Trimet.KEY,
         UV.KEY,

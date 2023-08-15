@@ -118,9 +118,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             splash.show()
             time.sleep(10)
 
-        self.clock = Clock(  # pylint: disable=attribute-defined-outside-init
-            self, NTP_SOCKET_NUMBER
-        )
+        self.clock = Clock(self)  # pylint: disable=attribute-defined-outside-init
 
         syslogger = os.getenv("syslogger")
         if syslogger is not None:
