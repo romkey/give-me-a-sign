@@ -12,3 +12,4 @@ adafruit_ds3231
 adafruit_pcf8523
 adafruit_matrixportal
 adafruit_esp32spi
+adafruit_httpserver

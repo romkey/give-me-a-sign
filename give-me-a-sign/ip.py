@@ -34,7 +34,7 @@ class IP:
         self._line = ScrollingLabel(
             terminalio.FONT,
             color=0x00FF00,
-            text=self._app.esp.pretty_ip(self._app.esp.ip_address),
+            text=str(self._app.platform.wifi_ip_address),
             max_characters=16,
             animate_time=1,
         )

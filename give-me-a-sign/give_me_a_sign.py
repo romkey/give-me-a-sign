@@ -19,15 +19,18 @@ import terminalio
 import microcontroller
 import rtc
 
-from adafruit_esp32spi import adafruit_esp32spi
+#try:
+from platform_native import Platform
+#except:
+#  import platform_esp32spi
+
 from adafruit_matrixportal.matrix import Matrix
 from adafruit_debouncer import Button
 import adafruit_logging as Logger
 import adafruit_display_text.label
 
 from data import Data
-from syslogger import SyslogUDPHandler
-from server import Server
+#from syslogger import SyslogUDPHandler
 
 from clock import Clock
 from greet import Greet
@@ -75,6 +78,8 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
     """
 
     def __init__(self):
+        self._platform = Platform(self)
+
         displayio.release_displays()
 
         self.matrix = Matrix()
@@ -83,7 +88,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self._setup_buttons()
         self._setup_rtc()
-        self._setup_esp()
+        self._platform.wifi_connect()
 
         self.data = Data()
         self.logger = Logger.getLogger("default")
@@ -98,14 +103,15 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         """
         Kicks off the software side of things
         """
+        print("Splash screen...")
         splash = Splash(self, "/assets/wifi.bmp")
         splash.show()
-        self._connect_wifi()
-        print(f"IP address {self.esp.pretty_ip(self.esp.ip_address)}")
+        self._platform.wifi_connect()
+        print(f"IP address {self._platform.wifi_ip_address}")
 
         self.ip_screen = IP(self)  # pylint: disable=attribute-defined-outside-init
 
-        if not DEBUG:
+        if DEBUG:
             self.ip_screen.show()
 
             show_until = time.monotonic_ns() + 20 * 1e9
@@ -120,15 +126,14 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self.clock = Clock(self)  # pylint: disable=attribute-defined-outside-init
 
-        syslogger = os.getenv("syslogger")
-        if syslogger is not None:
-            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
-            self.logger.info("Syslogger set up")
-        else:
-            self.logger.info("No syslogger")
+#        syslogger = os.getenv("syslogger")
+#        if syslogger is not None:
+#            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
+#            self.logger.info("Syslogger set up")
+#        else:
+#            self.logger.info("No syslogger")
 
-        self.server = Server(self)  # pylint: disable=attribute-defined-outside-init
-        self.server.start()
+        self._platform.start_server()
 
         self.greeter = Greet(self)  # pylint: disable=attribute-defined-outside-init
         self.weather = Weather(self)  # pylint: disable=attribute-defined-outside-init
@@ -191,54 +196,6 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self.rtc is None:
             self.rtc = rtc.RTC()
 
-    def _setup_esp(self):
-        """
-        Initialize the ESP32 wifi coprocessor
-        """
-        spi = board.SPI()
-        esp32_cs = digitalio.DigitalInOut(board.ESP_CS)
-        esp32_ready = digitalio.DigitalInOut(board.ESP_BUSY)
-        esp32_reset = digitalio.DigitalInOut(board.ESP_RESET)
-        self.esp = adafruit_esp32spi.ESP_SPIcontrol(
-            spi, esp32_cs, esp32_ready, esp32_reset
-        )
-
-        print(f"ESP AirLift version {self.esp.firmware_version.decode()}")
-
-    def _connect_wifi(self):
-        """
-        Connect to wifi!
-
-        This seems to mysteriously fail often.
-        """
-        ssid = os.getenv("wifi_ssid")
-        password = os.getenv("wifi_password")
-
-        if ssid is None or password is None:
-            print("wifi_ssid or wifi_password not set in secrets.toml")
-            return
-
-        try:
-            self.esp.connect({"ssid": ssid, "password": password})
-        except ConnectionError:
-            print("wifi failure")
-            print("scanning...")
-            for access_point in self.esp.scan_networks():
-                print(
-                    f'\t{access_point["ssid"].decode()}\t\tRSSI: {access_point["rssi"]}'
-                )
-
-            time.sleep(5)
-            microcontroller.reset()
-
-        print(
-            "MAC address ",
-            ":".join(
-                "%02x" % b
-                for b in self.esp.MAC_address_actual  # pylint: disable=consider-using-f-string,line-too-long
-            ),
-        )
-
     # fmt: off
     def loop(self) -> None: # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
     # fmt: on
@@ -248,7 +205,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         It allows the web server to run, checks the state of the buttons, and runs the
         state machine that decides what to display on the LED matrix
         """
-        self.server.loop()
+        self._platform.loop()
         self.tones.loop()
         gc.collect()
 
@@ -421,3 +378,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             return debug["debug"]
         except KeyError:
             return False
+
+    @property
+    def platform(self):
+        return self._platform
