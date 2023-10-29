@@ -22,7 +22,7 @@ PORT = 123
 NTP_TO_UNIX_EPOCH = 2208988800  # 1970-01-01 00:00:00
 
 
-class NTP:
+class AppNTP:
     """
     Very simple NTP client implementation for Adafruit AirLift
     network co-processors. Not general purpose, it's specific

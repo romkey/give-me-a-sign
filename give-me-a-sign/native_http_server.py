@@ -20,7 +20,16 @@ import board
 
 import wifi
 import socketpool
-from adafruit_httpserver import Server, Route, Request, Response, FileResponse, JSONResponse, Redirect
+from adafruit_httpserver import (
+    Server,
+    Route,
+    Request,
+    Response,
+    FileResponse,
+    JSONResponse,
+    Redirect,
+    Status,
+)
 
 from aqi import AQI
 from clock import Clock
@@ -39,6 +48,7 @@ Web server
 Provides endpoints for managing the sign and for pushing
 data to it (like weather, Air Quality Index, etc)
 """
+
 
 class AppServer:
     """
@@ -59,7 +69,7 @@ class AppServer:
         Tones.KEY,
         Trimet.KEY,
         UV.KEY,
-        Weather.KEY
+        Weather.KEY,
     ]
 
     def __init__(self, app):
@@ -75,16 +85,27 @@ class AppServer:
         Start the server - set all the routes and set up the web server
         """
         for endpoint in self.STORE_ENDPOINTS:
-          self._http_server.add_routes([ Route(f"/{endpoint}", "POST",
-            lambda request, key = endpoint: Server.store_data(request, key)
-            ) ] )
+            stash = self
 
-        self._http_server.add_routes([ Route("/reboot", "GET", lambda request: microcontroller.reset()),
-                                       Route("/info", "GET", lambda request: Server.info(self, request)),
-                                       Route("/data", "GET", lambda request: Server.data(self, request)),
-                                       Route("/set-time", "POST", lambda request: Server.set_time(self, request)),
-                                       Route("/image", "POST", lambda request: Server.image(self, request))
-                                         ])
+            self._http_server.add_routes(
+                [
+                    Route(
+                        f"/{endpoint}",
+                        "POST",
+                        lambda request, key=endpoint: stash.store_data(request, key),
+                    )
+                ]
+            )
+
+        self._http_server.add_routes(
+            [
+                Route("/reboot", "GET", lambda request: microcontroller.reset()),
+                Route("/info", "GET", lambda request: stash.info(request)),
+                Route("/data", "GET", lambda request: stash.data(request)),
+                Route("/set-time", "POST", lambda request: stash.set_time(request)),
+                Route("/image", "POST", lambda request: stash.image(request)),
+            ]
+        )
         self._http_server.start(str(wifi.radio.ipv4_address))
 
     def loop(self) -> None:
@@ -96,19 +117,21 @@ class AppServer:
         except OSError:
             self._app.esp.reset()
 
-    def store_data(self, environ, key) -> list:
+    def store_data(self, request, key) -> list:
         """
         Reusable generic handler called by several routes, which
         stores an object represented in JSON in Data associated
         with a particular key
         """
-        print(environ["wsgi.input"].getvalue())
+        print(dir(request))
+        body = request.body.decode()
+        print(body)
 
         try:
-            msg = json.loads(environ["wsgi.input"].getvalue())
+            msg = json.loads(body)
         except ValueError:
             self._app.logger.error(
-                f'server:store_data({key}) store_data failed: {environ["wsgi.input"].getvalue()}'
+                f"server:store_data({key}) store_data failed: {body}"
             )
 
             return ("400 Invalid JSON", [], [])
@@ -117,7 +140,7 @@ class AppServer:
 
         self._app.logger.info(f"server:store_data({key}) got JSON: {msg}")
 
-        return ("200 OK", [], [])
+        return Response(request, status=Status(200, "OK"))
 
     def set_time(self, environ) -> list:
         """
@@ -205,7 +228,7 @@ class AppServer:
         )
         return ("200 OK", [], [])
 
-    def info(self, environ) -> list:  # pylint: disable=unused-argument
+    def info(self, request) -> list:  # pylint: disable=unused-argument
         """
         Return information about the sign including version numbers, current status,
         free resources
@@ -227,11 +250,13 @@ class AppServer:
             "wifi": {
                 "ssid": self._app.esp.ssid.decode(),
                 "bssid": ":".join(
-                    "%02x" % b for b in self._app.esp.bssid   # pylint: disable=consider-using-f-string
+                    "%02x" % b
+                    for b in self._app.esp.bssid  # pylint: disable=consider-using-f-string
                 ),
                 "rssi": self._app.esp.rssi,
                 "mac": ":".join(
-                    "%02x" % b for b in self._app.esp.MAC_address_actual   # pylint: disable=consider-using-f-string
+                    "%02x" % b
+                    for b in self._app.esp.MAC_address_actual  # pylint: disable=consider-using-f-string
                 ),
                 "ip": self._app.esp.pretty_ip(self._app.esp.ip_address),
             },
@@ -251,7 +276,12 @@ class AppServer:
 
         self._app.logger.info(f"server:get_info -> {info}")
 
-        return ("200 Success", [("Content-type", "application/json")], json.dumps(info))
+        return Response(
+            request,
+            status=Status(200, "OK"),
+            content_type="application/json",
+            body=json.dumps(info),
+        )
 
     def data(self, environ) -> list:  # pylint: disable=unused-argument
         """

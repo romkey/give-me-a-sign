@@ -19,9 +19,10 @@ import terminalio
 import microcontroller
 import rtc
 
-#try:
+# try:
 from platform_native import Platform
-#except:
+
+# except:
 #  import platform_esp32spi
 
 from adafruit_matrixportal.matrix import Matrix
@@ -30,7 +31,8 @@ import adafruit_logging as Logger
 import adafruit_display_text.label
 
 from data import Data
-#from syslogger import SyslogUDPHandler
+
+# from syslogger import SyslogUDPHandler
 
 from clock import Clock
 from greet import Greet
@@ -47,7 +49,7 @@ from pollen import Pollen
 HTTP_SERVER_SOCKET_NUMBER = 0
 NTP_SOCKET_NUMBER = 1
 FREE_MEMORY_LIMIT = 10000
-DEBUG = True
+DEBUG = False
 
 
 class States:  # pylint: disable=too-few-public-methods
@@ -126,12 +128,12 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self.clock = Clock(self)  # pylint: disable=attribute-defined-outside-init
 
-#        syslogger = os.getenv("syslogger")
-#        if syslogger is not None:
-#            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
-#            self.logger.info("Syslogger set up")
-#        else:
-#            self.logger.info("No syslogger")
+        #        syslogger = os.getenv("syslogger")
+        #        if syslogger is not None:
+        #            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
+        #            self.logger.info("Syslogger set up")
+        #        else:
+        #            self.logger.info("No syslogger")
 
         self._platform.start_server()
 
