@@ -14,3 +14,4 @@ adafruit_matrixportal
 adafruit_esp32spi
 adafruit_httpserver
 adafruit_ntp
+adafruit_minimqtt

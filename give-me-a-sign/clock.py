@@ -187,7 +187,7 @@ class Clock:
             if solar["sunrise"] - 60 * 60 <= now <= solar["sunrise"]:
                 return 0x0000FF  # blue
 
-            if now <= solar["sunset"]:
+            if solar["sunset"] < solar["sunrise"] and now <= solar["sunset"]:
                 return 0x00FF00  # green
 
             return 0xFF0000  # red

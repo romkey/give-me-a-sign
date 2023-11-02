@@ -20,16 +20,7 @@ import board
 
 import wifi
 import socketpool
-from adafruit_httpserver import (
-    Server,
-    Route,
-    Request,
-    Response,
-    FileResponse,
-    JSONResponse,
-    Redirect,
-    Status,
-)
+from adafruit_httpserver import Server, Route, Response, JSONResponse, Status
 
 from aqi import AQI
 from clock import Clock
@@ -85,14 +76,12 @@ class AppServer:
         Start the server - set all the routes and set up the web server
         """
         for endpoint in self.STORE_ENDPOINTS:
-            stash = self
-
             self._http_server.add_routes(
                 [
                     Route(
                         f"/{endpoint}",
                         "POST",
-                        lambda request, key=endpoint: stash.store_data(request, key),
+                        lambda request, key=endpoint: self.store_data(request, key),
                     )
                 ]
             )
@@ -100,10 +89,18 @@ class AppServer:
         self._http_server.add_routes(
             [
                 Route("/reboot", "GET", lambda request: microcontroller.reset()),
-                Route("/info", "GET", lambda request: stash.info(request)),
-                Route("/data", "GET", lambda request: stash.data(request)),
-                Route("/set-time", "POST", lambda request: stash.set_time(request)),
-                Route("/image", "POST", lambda request: stash.image(request)),
+                Route(
+                    "/info", "GET", lambda request: self.info(request)
+                ),  # pylint: disable=unnecessary-lambda
+                Route(
+                    "/data", "GET", lambda request: self.data(request)
+                ),  # pylint: disable=unnecessary-lambda
+                Route(
+                    "/set-time", "POST", lambda request: self.set_time(request)
+                ),  # pylint: disable=unnecessary-lambda
+                Route(
+                    "/image", "POST", lambda request: self.image(request)
+                ),  # pylint: disable=unnecessary-lambda
             ]
         )
         self._http_server.start(str(wifi.radio.ipv4_address))
@@ -112,10 +109,7 @@ class AppServer:
         """
         Let the underlying HTTP server run
         """
-        try:
-            self._http_server.poll()
-        except OSError:
-            self._app.esp.reset()
+        self._http_server.poll()
 
     def store_data(self, request, key) -> list:
         """
@@ -123,9 +117,7 @@ class AppServer:
         stores an object represented in JSON in Data associated
         with a particular key
         """
-        print(dir(request))
         body = request.body.decode()
-        print(body)
 
         try:
             msg = json.loads(body)
@@ -142,36 +134,33 @@ class AppServer:
 
         return Response(request, status=Status(200, "OK"))
 
-    def set_time(self, environ) -> list:
+    def set_time(self, request) -> list:
         """
         Handler to set the time, passed in as JSON
 
         .. code-block:: python
         { time: integer }
         """
-        print(environ["wsgi.input"].getvalue())
+        body = request.body.decode()
 
         try:
-            msg = json.loads(environ["wsgi.input"].getvalue())
+            msg = json.loads(body)
         except ValueError:
-            print("invalid JSON", environ["wsgi.input"].getvalue())
+            print(f"invalid JSON {body}")
 
-            self._app.logger.error(
-                f'server:set_time: invalid JSON {environ["wsgi.input"].getvalue()}'
-            )
+            self._app.logger.error(f"server:set_time: invalid JSON {body}")
 
-            return ("400 Invalid JSON", [], [])
+            return Response(request, status=Status(400, "Invalid JSON"))
 
         try:
             then = time.localtime(msg["time"])
         except KeyError:
-            return ("400 Missing key 'time'", [], [])
+            return Response(request, status=Status(400, "Missing key 'time'"))
 
         self._app.rtc.datetime = then
 
         self._app.logger.info(f'server:set_time({msg["time"]})')
-
-        return ("200 OK", [], [])
+        return Response(request, status=Status(200, "OK"))
 
     # /image?duration=seconds&animate=true/false
     # body is file
@@ -246,19 +235,12 @@ class AppServer:
             "free_memory": gc.mem_free(),  # pylint: disable=no-member
             "flash": {"free": flash_free, "size": flash_size},
             "rtc": self._app.rtc.__class__.__name__,
-            "esp32_firmware": self._app.esp.firmware_version.decode(),
             "wifi": {
-                "ssid": self._app.esp.ssid.decode(),
-                "bssid": ":".join(
-                    "%02x" % b
-                    for b in self._app.esp.bssid  # pylint: disable=consider-using-f-string
-                ),
-                "rssi": self._app.esp.rssi,
-                "mac": ":".join(
-                    "%02x" % b
-                    for b in self._app.esp.MAC_address_actual  # pylint: disable=consider-using-f-string
-                ),
-                "ip": self._app.esp.pretty_ip(self._app.esp.ip_address),
+                "ssid": self._app.platform.wifi_ssid,
+                "bssid": self._app.platform.wifi_bssid,
+                "rssi": self._app.platform.wifi_rssi,
+                "mac": self._app.platform.mac_address,
+                "ip": self._app.platform.ip_address,
             },
             "platform": {
                 "python_version": sys.version,
@@ -276,21 +258,12 @@ class AppServer:
 
         self._app.logger.info(f"server:get_info -> {info}")
 
-        return Response(
-            request,
-            status=Status(200, "OK"),
-            content_type="application/json",
-            body=json.dumps(info),
-        )
+        return JSONResponse(request, data=info)
 
-    def data(self, environ) -> list:  # pylint: disable=unused-argument
+    def data(self, request) -> list:  # pylint: disable=unused-argument
         """
         Return all the data in Data, for debugging
         """
         self._app.logger.info(f"server:get_data -> {self._app.data.all()}")
 
-        return (
-            "200 Success",
-            [("Content-type", "application/json")],
-            json.dumps(self._app.data.all()),
-        )
+        return JSONResponse(request, data=self._app.data.all())

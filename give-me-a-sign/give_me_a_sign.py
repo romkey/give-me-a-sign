@@ -11,7 +11,6 @@ give-me-a-sign/give-me-a-sign - application module for LED Matrix display
 
 import time
 import gc
-import os
 import board
 import displayio
 import digitalio
@@ -19,8 +18,10 @@ import terminalio
 import microcontroller
 import rtc
 
-# try:
-from platform_native import Platform
+try:
+    from platform_native import Platform
+except ImportError:
+    from platform_esp32spi import Platform
 
 # except:
 #  import platform_esp32spi
@@ -135,7 +136,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         #        else:
         #            self.logger.info("No syslogger")
 
-        self._platform.start_server()
+        self._platform.start_servers()
 
         self.greeter = Greet(self)  # pylint: disable=attribute-defined-outside-init
         self.weather = Weather(self)  # pylint: disable=attribute-defined-outside-init
@@ -383,4 +384,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
     @property
     def platform(self):
+        """
+        Return the platform object
+        """
         return self._platform
