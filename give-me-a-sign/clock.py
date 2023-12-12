@@ -19,8 +19,6 @@ import displayio
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
 
-from ntp import NTP
-
 
 class Clock:
     """
@@ -189,7 +187,7 @@ class Clock:
             if solar["sunrise"] - 60 * 60 <= now <= solar["sunrise"]:
                 return 0x0000FF  # blue
 
-            if now <= solar["sunset"]:
+            if solar["sunset"] < solar["sunrise"] and now <= solar["sunset"]:
                 return 0x00FF00  # green
 
             return 0xFF0000  # red
@@ -248,13 +246,14 @@ class Clock:
         ):
             return
 
-        try:
-            server = ntp_data["server"]
-            ntp = NTP(self._app.esp, server)
-        except KeyError:
-            ntp = NTP(self._app.esp)
+        #        try:
+        #            server = ntp_data["server"]
+        #            ntp = NTP(self._app.esp, server)
+        #        except KeyError:
+        #            ntp = NTP(self._app.esp)
 
-        updated_time = ntp.update()
+        updated_time = self._app.platform.ntp_sync()
+        print(f"ntp_sync {updated_time}")
         if updated_time is not None:
             self._last_ntp_check = time.time()
             self._app.rtc.datetime = updated_time
