@@ -18,8 +18,8 @@ import storage
 import microcontroller
 import board
 
-import wifi
-import socketpool
+# import wifi
+# import socketpool
 from adafruit_httpserver import Server, Route, Response, JSONResponse, Status
 
 from aqi import AQI
@@ -46,6 +46,7 @@ class AppServer:
     Mostly handlers for routes
     """
 
+    # pylint: disable=duplicate-code
     STORE_ENDPOINTS = [
         AQI.KEY,
         "debug",
@@ -68,8 +69,9 @@ class AppServer:
         :param app: the GiveMeASign object this belongs to
         """
         self._app = app
-        pool = socketpool.SocketPool(wifi.radio)
-        self._http_server = Server(pool)
+        #        pool = socketpool.SocketPool(wifi.radio)
+        #        self._http_server = Server(pool)
+        self._http_server = Server(app.platform.get_socket())
 
     def start(self) -> None:
         """
@@ -89,21 +91,15 @@ class AppServer:
         self._http_server.add_routes(
             [
                 Route("/reboot", "GET", lambda request: microcontroller.reset()),
-                Route(
-                    "/info", "GET", lambda request: self.info(request)
-                ),  # pylint: disable=unnecessary-lambda
-                Route(
-                    "/data", "GET", lambda request: self.data(request)
-                ),  # pylint: disable=unnecessary-lambda
-                Route(
-                    "/set-time", "POST", lambda request: self.set_time(request)
-                ),  # pylint: disable=unnecessary-lambda
-                Route(
-                    "/image", "POST", lambda request: self.image(request)
-                ),  # pylint: disable=unnecessary-lambda
+                # pylint: disable=unnecessary-lambda
+                Route("/info", "GET", lambda request: self.info(request)),
+                Route("/data", "GET", lambda request: self.data(request)),
+                Route("/set-time", "POST", lambda request: self.set_time(request)),
+                Route("/image", "POST", lambda request: self.image(request)),
             ]
         )
-        self._http_server.start(str(wifi.radio.ipv4_address))
+        #        self._http_server.start(str(wifi.radio.ipv4_address))
+        self._http_server.start(self._app.platform.wifi_ip_address)
 
     def loop(self) -> None:
         """

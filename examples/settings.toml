@@ -1,8 +1,11 @@
+# use wifi_ssid and wifi_password for non-native networking or if you don't
+# want to bring up the web workflow
 wifi_ssid="YOUR WIFI SSID"
 wifi_password="YOUR WIFI PASSWORD"
 syslogger="SYSLOG-SERVER-IP"
 anonymous_greetings="Person A.,Person B."
 
+# quotation marks matter!
 MQTT_BROKER="broker-name-or-IP-address"
 MQTT_PORT=1883
 MQTT_SSL=0
@@ -11,7 +14,9 @@ MQTT_USERNAME="username"
 MQTT_PASSWORD="password"
 MQTT_TOPIC_PREFIX="givemeasign"
 
-CIRCUITPY_WIFI_SSID="scottswifi"
+# using these variables will automatically connect to wifi
+# at start on Matrix Portal S3 and will start web workflow
+CIRCUITPY_WIFI_SSID="not-so-secret-ssid"
 CIRCUITPY_WIFI_PASSWORD="secretpassword"
 
 # To enable modifying files from the web. Change this too!

@@ -32,10 +32,7 @@ class AppNTP:
     def __init__(self, esp, server=DEFAULT_SERVER):
         self._esp = esp
         print("init", server)
-        if server is None:
-            self._server = DEFAULT_SERVER
-        else:
-            self._server = server
+        self._server = server
 
     def update(self) -> None:
         """
