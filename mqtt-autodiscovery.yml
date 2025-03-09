@@ -1,0 +1,197 @@
+# SPDX-FileCopyrightText: 2025 John Romkey
+#
+# SPDX-License-Identifier: MIT
+  sensor:
+    - name: "Board"
+      state_topic: "givemeasign/sign/48:27:e2:20:48:a8/diagnostics"
+      unique_id: "4827e22048a8_givemeasign_board"
+      device:
+        identifiers: ["mosquitto_broker"]
+
+    - name: "Mosquitto Up Time"
+      state_topic: "$SYS/broker/uptime"
+      unique_id: "mosquitto_uptime"
+      device:
+        identifiers: ["mosquitto_broker"]
+      value_template: >
+        {% if value is string %}
+          {% set parts = value.split(' ') %}
+          {% if parts | length > 0 %}
+            {{ parts[0] | int }}
+          {% else %}
+            0
+          {% endif %}
+        {% else %}
+          0
+        {% endif %}
+      unit_of_measurement: "seconds"
+      device_class: "duration"
+
+
+    - name: "Mosquitto Clients Connected"
+      state_topic: "$SYS/broker/clients/connected"
+      unique_id: "mosquitto_clients_connected"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Disconnected"
+      state_topic: "$SYS/broker/clients/disconnected"
+      unique_id: "mosquitto_clients_disconnected"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Total"
+      state_topic: "$SYS/broker/clients/total"
+      unique_id: "mosquitto_clients_total"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Inactive"
+      state_topic: "$SYS/broker/clients/inactive"
+      unique_id: "mosquitto_clients_inactive"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Active"
+      state_topic: "$SYS/broker/clients/active"
+      unique_id: "mosquitto_clients_active"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Expired"
+      state_topic: "$SYS/broker/clients/expired"
+      unique_id: "mosquitto_clients_expired"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+    - name: "Mosquitto Clients Maximum"
+      state_topic: "$SYS/broker/clients/maximum"
+      unique_id: "mosquitto_clients_maximum"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "clients"
+      state_class: measurement
+
+
+    - name: "Mosquitto Messages Received"
+      state_topic: "$SYS/broker/messages/received"
+      unique_id: "mosquitto_messages_received"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "messages"
+      state_class: total_increasing
+
+    - name: "Mosquitto Messages Sent"
+      state_topic: "$SYS/broker/messages/sent"
+      unique_id: "mosquitto_messages_sent"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "messages"
+      state_class: total_increasing
+
+    - name: "Mosquitto Messages Stored"
+      state_topic: "$SYS/broker/messages/stored"
+      unique_id: "mosquitto_messages_stored"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "messages"
+      state_class: total_increasing
+
+    - name: "Mosquitto Store Count"
+      state_topic: "$SYS/broker/store/messages/count"
+      unique_id: "mosquitto_store_count"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "messages"
+      state_class: total
+
+    - name: "Mosquitto Store Bytes"
+      state_topic: "$SYS/broker/store/messages/bytes"
+      unique_id: "mosquitto_store_bytes"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "bytes"
+      device_class: "data_size"
+      state_class: total
+
+
+    - name: "Mosquitto Load Msgs Rx 1min"
+      state_topic: "$SYS/broker/load/messages/received/1min"
+      unique_id: "mosquitto_load_msgs_rx_1min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+    - name: "Mosquitto Load Msgs Rx 5min"
+      state_topic: "$SYS/broker/load/messages/received/5min"
+      unique_id: "mosquitto_load_msgs_rx_5min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+    - name: "Mosquitto Load Msgs Rx 15min"
+      state_topic: "$SYS/broker/load/messages/received/15min"
+      unique_id: "mosquitto_load_msgs_rx_15min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+    - name: "Mosquitto Load Msgs Tx 1min"
+      state_topic: "$SYS/broker/load/messages/transmitted/1min"
+      unique_id: "mosquitto_load_msgs_tx_1min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+    - name: "Mosquitto Load Msgs Tx 5min"
+      state_topic: "$SYS/broker/load/messages/transmitted/5min"
+      unique_id: "mosquitto_load_msgs_tx_5min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+    - name: "Mosquitto Load Msgs Tx 15min"
+      state_topic: "$SYS/broker/load/messages/transmitted/15min"
+      unique_id: "mosquitto_load_msgs_tx_15min"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "load"
+
+
+
+
+
+
+    - name: "Mosquitto Bytes Received"
+      state_topic: "$SYS/broker/bytes/received"
+      unique_id: "mosquitto_bytes_received"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "bytes"
+      device_class: "data_size"
+      state_class: total_increasing
+
+    - name: "Mosquitto Bytes Sent"
+      state_topic: "$SYS/broker/bytes/sent"
+      unique_id: "mosquitto_bytes_sent"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "bytes"
+      device_class: "data_size"
+      state_class: total_increasing
+
+
+    - name: "Mosquitto Subscribers"
+      state_topic: "$SYS/broker/subscriptions"
+      unique_id: "mosquitto_subscribers"
+      device:
+        identifiers: ["mosquitto_broker"]
+      unit_of_measurement: "subscriptions"
+      state_class: measurement
