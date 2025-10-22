@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2023 John Romkey
 #
 # SPDX-License-Identifier: MIT
-import time
 import traceback
 import board
+import displayio
+import rgbmatrix
+import framebufferio
 import microcontroller
 import supervisor
 
@@ -20,7 +22,27 @@ supervisor.runtime.autoreload = False
 
 print("hello world")
 
-app = GiveMeASign()
+displayio.release_displays()
+matrix = rgbmatrix.RGBMatrix(
+    width=64,
+    height=32,
+    bit_depth=2,
+    rgb_pins=[
+        board.MTX_R1,
+        board.MTX_G1,
+        board.MTX_B1,
+        board.MTX_R2,
+        board.MTX_G2,
+        board.MTX_B2,
+    ],
+    addr_pins=[board.MTX_ADDRA, board.MTX_ADDRB, board.MTX_ADDRC, board.MTX_ADDRD],
+    clock_pin=board.MTX_CLK,
+    latch_pin=board.MTX_LAT,
+    output_enable_pin=board.MTX_OE,
+)
+display = framebufferio.FramebufferDisplay(matrix, rotation=0)
+
+app = GiveMeASign(display)
 app.start()
 
 while True:

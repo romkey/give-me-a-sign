@@ -67,7 +67,7 @@ class Trimet:
 
         group = displayio.Group()
         group.append(line)
-        self._app.display.show(group)
+        self._app.display.root_group = group
 
         return True
 

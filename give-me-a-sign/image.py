@@ -48,7 +48,7 @@ class Image:
         tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)
         group = displayio.Group()
         group.append(tile_grid)
-        self._app.display.show(group)
+        self._app.display.root_group = group
 
         return True
 

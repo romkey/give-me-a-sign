@@ -99,7 +99,7 @@ class AppServer:
             ]
         )
         #        self._http_server.start(str(wifi.radio.ipv4_address))
-        self._http_server.start(self._app.platform.wifi_ip_address)
+        self._http_server.start(str(self._app.platform.wifi_ip_address))
 
     def loop(self) -> None:
         """

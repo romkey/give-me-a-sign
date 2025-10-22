@@ -105,7 +105,7 @@ class Weather:
             high_low_text = adafruit_display_text.label.Label(
                 terminalio.FONT,
                 color=0x00FF00,
-                text=f'{int(weather["current"]["humidity"])}% {int(weather["forecast"]["low"])}->{int(weather["forecast"]["high"])}',  # pylint: disable=line-too-long
+                text=f'{int(weather["current"]["humidity"])}% {int(forecast["low"])}->{int(forecast["high"])}',  # pylint: disable=line-too-long
             )
         except KeyError:
             return False
@@ -114,7 +114,7 @@ class Weather:
         high_low_text.y = 24
         group.append(high_low_text)
 
-        self._app.display.show(group)
+        self._app.display.root_group = group
         return True
 
     @staticmethod

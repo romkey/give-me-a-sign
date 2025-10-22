@@ -85,7 +85,7 @@ class Greet:
         group = displayio.Group()
         group.append(line1)
         group.append(line2)
-        self._app.display.show(group)
+        self._app.display.root_group = group
 
         return True
 

@@ -73,7 +73,7 @@ class Message:
 
         group = displayio.Group()
         group.append(line)
-        self._app.display.show(group)
+        self._app.display.root_group = group
         return True
 
     def loop(self) -> None:  # pylint: disable=no-self-use

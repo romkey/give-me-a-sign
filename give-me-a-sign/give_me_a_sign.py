@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 John Romkey
+# SPDX-FileCopyrightText: 2023-2025 John Romkey
 #
 # SPDX-License-Identifier: MIT
 
@@ -26,7 +26,6 @@ except ImportError:
 # except:
 #  import platform_esp32spi
 
-from adafruit_matrixportal.matrix import Matrix
 from adafruit_debouncer import Button
 import adafruit_logging as Logger
 import adafruit_display_text.label
@@ -46,6 +45,7 @@ from uv import UV
 from aqi import AQI
 from pollen import Pollen
 
+__version__ = "0.5.1"
 
 HTTP_SERVER_SOCKET_NUMBER = 0
 NTP_SOCKET_NUMBER = 1
@@ -80,13 +80,10 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
     gets displayed when
     """
 
-    def __init__(self):
+    def __init__(self, display):
         self._platform = Platform(self)
 
-        displayio.release_displays()
-
-        self.matrix = Matrix()
-        self.display = self.matrix.display
+        self.display = display
         self.display.root_group = None
 
         self._setup_buttons()
@@ -145,7 +142,6 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self.aqi = AQI(self)  # pylint: disable=attribute-defined-outside-init
         self.tones = Tones(self)  # pylint: disable=attribute-defined-outside-init
         self.pollen = Pollen(self)  # pylint: disable=attribute-defined-outside-init
-
         self._next_up(States.CLOCK, 20)
 
     def _setup_buttons(self):
@@ -188,12 +184,14 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                     rtc.set_time_source(self.rtc)
             elif 0x68 in addresses:
                 try:
-                    import adafruit_pcf8523  # pylint: disable=import-outside-toplevel
+                    from adafruit_pcf8523.pcf8523 import (  # pylint: disable=import-outside-toplevel
+                        PCF8523,
+                    )
                 except ImportError:
                     print("Missing adafruit_pcf8523 library, hardware RTC disabled")
                 else:
                     print("found PCF8523 RTC")
-                    self.rtc = adafruit_pcf8523.PCF8523(i2c)
+                    self.rtc = PCF8523(i2c)
                     rtc.set_time_source(self.rtc)
 
         if self.rtc is None:
@@ -235,6 +233,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             group.append(line)
             self.display.show(group)
 
+            print("HALT")
             while True:
                 pass
 

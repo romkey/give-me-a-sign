@@ -82,7 +82,7 @@ class Occupancy:
         # Put each line of text into a Group, then show that group.
         group = displayio.Group()
         group.append(line1)
-        self._app.display.show(group)
+        self._app.display.root_group = group
 
         return True
 

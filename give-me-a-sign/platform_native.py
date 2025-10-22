@@ -116,8 +116,11 @@ class Platform:
         """
         Get the current time in UTC from NTP
         """
-        if self._ntp is not None:
-            return self._ntp.datetime
+        try:
+            if self._ntp is not None:
+                return self._ntp.datetime
+        except (OSError, ArithmeticError):
+            return None
 
         return None
 
@@ -140,6 +143,9 @@ class Platform:
         """
         Perform any repetitive tasks necessary
         """
+        if not self.wifi_is_connected:
+            print("WIFI disconnect")
+
         if self._server:
             self._server.loop()
 

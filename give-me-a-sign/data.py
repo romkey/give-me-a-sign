@@ -45,7 +45,8 @@ class Data:
         self._data[key][Data.KEY_UPDATED] = True
         self._data[key][Data.KEY_LAST_UPDATED] = time.time()
 
-        self._save()
+        if key == "timezone":
+            self._save()
 
     def get_item(self, key, default=None):
         """Get the value of the item associated with key, None if there is none"""
@@ -79,7 +80,8 @@ class Data:
             return
 
         self._data[key][Data.KEY_UPDATED] = False
-        self._save()
+
+    #        self._save()
 
     def all(self) -> dict:
         """Returns the entire dictionary. Not really recommended, but used for debugging"""

@@ -10,8 +10,8 @@ adafruit_debouncer
 adafruit_register
 adafruit_ds3231
 adafruit_pcf8523
-adafruit_matrixportal
 adafruit_esp32spi
 adafruit_httpserver
 adafruit_ntp
 adafruit_minimqtt
+adafruit_connection_manager

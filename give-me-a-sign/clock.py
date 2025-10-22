@@ -77,7 +77,7 @@ class Clock:
 
         self._clock_label.x = round(self._app.display.width / 2 - bb_width / 2)
         self._clock_label.y = self._app.display.height // 2
-        self._app.display.show(self._group)
+        self._app.display.root_group = self._group
 
     def mini_clock(self) -> Label:
         """Create and return a label with the current time rendered into it in a small font"""
@@ -226,6 +226,8 @@ class Clock:
             return False
 
     def _ntp_update(self) -> None:
+        print("NTP Update")
+
         ntp_data = self._app.data.get_item(
             Clock.KEY_NTP,
             {

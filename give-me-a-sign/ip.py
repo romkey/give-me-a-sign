@@ -47,7 +47,7 @@ class IP:
             self._line.x = round((self._app.display.width - width) / 2)
 
         self._line.y = self._app.display.height // 2
-        self._app.display.show(self._line)
+        self._app.display.root_group = self._line
 
         return True
 

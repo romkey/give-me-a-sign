@@ -44,6 +44,7 @@ class Pollen:
 
         .. code-block:: python
            { "count": integer }
+           { "tree": integer, "grass": integer }
         """
 
         pollen = self._app.data.get_item(Pollen.KEY)
@@ -60,9 +61,15 @@ class Pollen:
 
         g = displayio.Group()
         g.append(line)
-        self._app.display.show(g)
+        self._app.display.root_group = g
 
         return True
+
+    def _draw_tree(self) -> None:
+        """
+        draw a tree - brown trunk green circle
+        """
+        # brown is 0xA52A2A
 
     def loop(self) -> None:  # pylint: disable=no-self-use
         """

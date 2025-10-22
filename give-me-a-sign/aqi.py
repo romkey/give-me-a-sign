@@ -68,7 +68,7 @@ class AQI:
         mini_clock.y = 2
         group.append(mini_clock)
 
-        self._app.display.show(group)
+        self._app.display.root_group = group
 
         return True
 
