@@ -9,6 +9,26 @@ give-me-a-sign/give-me-a-sign - application module for LED Matrix display
 * Author: John Romkey
 """
 
+import sys
+
+_MIN_CIRCUITPYTHON = (10, 0, 0)
+
+
+def _require_circuitpython_version():
+    """Fail fast on unsupported CircuitPython (CP 10+). Skip on CPython for local tooling."""
+    if getattr(sys.implementation, "name", "") != "circuitpython":
+        return
+    ver = sys.implementation.version
+    if ver < _MIN_CIRCUITPYTHON:
+        vstr = ".".join(str(x) for x in ver)
+        raise RuntimeError(
+            "Give Me A Sign requires CircuitPython "
+            f"{_MIN_CIRCUITPYTHON[0]}.x or later (this build is {vstr})."
+        )
+
+
+_require_circuitpython_version()
+
 import time
 import gc
 import board
@@ -98,6 +118,27 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self._countdown_time = 0
         self._loop_state = States.CLOCK
+        self.display_enabled = True
+        self._blank_group = None
+
+    def _ensure_blank_group(self):
+        """Lazily build a full-frame black group for display-off mode."""
+        if self._blank_group is not None:
+            return
+        bitmap = displayio.Bitmap(self.display.width, self.display.height, 1)
+        palette = displayio.Palette(1)
+        palette[0] = 0x000000
+        tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)
+        group = displayio.Group()
+        group.append(tile_grid)
+        self._blank_group = group
+
+    def _apply_display_mask(self):
+        """When display is disabled, replace visible content with a black frame."""
+        if self.display_enabled:
+            return
+        self._ensure_blank_group()
+        self.display.root_group = self._blank_group
 
     def start(self):
         """
@@ -197,9 +238,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self.rtc is None:
             self.rtc = rtc.RTC()
 
-    # fmt: off
-    def loop(self) -> None: # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
-    # fmt: on
+    def loop(self) -> None:
         """
         This does all the work
 
@@ -212,12 +251,24 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         if gc.mem_free() < FREE_MEMORY_LIMIT:  # pylint: disable=no-member
             self.logger.error(
-                f"give_me_a_sign:low memory {gc.mem_free()}" # pylint: disable=no-member
+                f"give_me_a_sign:low memory {gc.mem_free()}"  # pylint: disable=no-member
             )  # pylint: disable=no-member
 
         self.button1.update()
         self.button2.update()
 
+        try:
+            self._loop_body()
+        finally:
+            self._apply_display_mask()
+
+    # fmt: off
+    def _loop_body(self) -> None: # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
+    # fmt: on
+        """
+        State machine and display updates; wrapped by loop() so display-off applies
+        after every iteration.
+        """
         if self.data.is_updated(Tones.KEY):
             self.tones.play()
 

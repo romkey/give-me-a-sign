@@ -9,8 +9,8 @@ give-me-a-sign/ip - IP address module for LED Matrix display
 * Author: John Romkey
 """
 
-from adafruit_display_text.scrolling_label import ScrollingLabel
 import terminalio
+from adafruit_display_text.bitmap_label import Label
 
 
 class IP:
@@ -31,7 +31,7 @@ class IP:
         """
         Fetch the IP address from the ESP32 and then display it on the screen.
         """
-        self._line = ScrollingLabel(
+        self._line = Label(
             terminalio.FONT,
             color=0x00FF00,
             text=str(self._app.platform.wifi_ip_address),

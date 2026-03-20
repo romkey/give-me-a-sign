@@ -10,6 +10,7 @@ give-me-a-sign/platform_native - clock module for LED Matrix display
 """
 
 import os
+import time
 import wifi
 import socketpool
 
@@ -17,6 +18,9 @@ import adafruit_ntp
 
 from native_http_server import AppServer
 from mqtt import SignMQTT
+
+WIFI_RETRY_MIN_S = 5
+WIFI_RETRY_MAX_S = 90
 
 
 class Platform:
@@ -32,6 +36,14 @@ class Platform:
         self._ntp = None
         self._server = None
         self._mqtt = None
+        self._socket_pool = None
+        self._wifi_next_retry_at = 0.0
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_restored_flag = False
+
+    def _refresh_socket_pool_and_ntp(self):
+        self._socket_pool = socketpool.SocketPool(wifi.radio)
+        self._ntp = adafruit_ntp.NTP(self._socket_pool, tz_offset=0)
 
     def wifi_connect(self) -> None:
         """
@@ -53,8 +65,41 @@ class Platform:
                 print("wifi failure")
                 return
 
-        pool = socketpool.SocketPool(wifi.radio)
-        self._ntp = adafruit_ntp.NTP(pool, tz_offset=0)
+        self._refresh_socket_pool_and_ntp()
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_next_retry_at = 0.0
+
+    def _try_wifi_reconnect(self) -> None:
+        now = time.monotonic()
+        if now < self._wifi_next_retry_at:
+            return
+
+        ssid = os.getenv("wifi_ssid")
+        password = os.getenv("wifi_password")
+        if ssid is None or password is None:
+            return
+
+        print("WiFi reconnect attempt")
+        try:
+            wifi.radio.connect(ssid, password)
+        except ConnectionError as error:
+            print("wifi reconnect failed:", error)
+            self._wifi_next_retry_at = now + self._wifi_backoff_s
+            self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
+            return
+
+        self._refresh_socket_pool_and_ntp()
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_next_retry_at = 0.0
+        self._wifi_restored_flag = True
+        print("WiFi reconnected")
+
+    def wifi_just_restored(self) -> bool:
+        """One-shot for MQTT to rebuild its client with a fresh socket pool."""
+        if self._wifi_restored_flag:
+            self._wifi_restored_flag = False
+            return True
+        return False
 
     @property
     def wifi_is_connected(self) -> bool:
@@ -99,10 +144,12 @@ class Platform:
         """
         return wifi.radio.ipv4_address
 
-    def get_socket(self):  # pylint: disable=no-self-use
+    def get_socket(self):
         """
-        Return a socket
+        Return a socket pool tied to the current WiFi session.
         """
+        if self._socket_pool is not None and self.wifi_is_connected:
+            return self._socket_pool
         return socketpool.SocketPool(wifi.radio)
 
     @property
@@ -139,12 +186,18 @@ class Platform:
         """
         return self._server
 
+    @property
+    def mqtt_is_connected(self) -> bool:
+        if self._mqtt is None:
+            return False
+        return self._mqtt.is_connected_to_broker()
+
     def loop(self) -> None:
         """
         Perform any repetitive tasks necessary
         """
         if not self.wifi_is_connected:
-            print("WIFI disconnect")
+            self._try_wifi_reconnect()
 
         if self._server:
             self._server.loop()

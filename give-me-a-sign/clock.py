@@ -35,7 +35,12 @@ class Clock:
     KEY_SOLAR = "solar"
 
     DEFAULT_NTP_REFRESH_INTERVAL = 60 * 60 * 6
-    DEFAULT_COLOR = 0x00FF00
+    # Shown when solar JSON is missing or invalid (distinct from intentional night green)
+    NO_SOLAR_COLOR = 0xFFAA00
+    COLOR_DAY = 0x00FF00
+    COLOR_NIGHT = 0xFF0000
+    COLOR_PRE_SUNRISE = 0x0000FF
+    COLOR_PRE_SUNSET = 0xFFA500
 
     def __init__(self, app):
         """
@@ -58,9 +63,11 @@ class Clock:
         self._timezone_breaks = None
         self._timezone_cache_until = 0
         self._timezone_cached_offset = 0
+        self._solar_prev_sunrise = None
 
     def clock(self, label) -> None:
         """Put the clock into the given label"""
+        # Solar sunrise/sunset from MQTT are Unix UTC seconds; match time.time().
         label.color = self._calculate_color(time.time())
         now = time.localtime(self.get_local_time())
 
@@ -106,16 +113,12 @@ class Clock:
             self._ntp_update()
             self._last_ntp_check = time.time()
 
-        # one clock update per second
-        # something's wrong with this conditional, the clock is not updating
         if (
             self._last_update_time is None
             or time.monotonic_ns() > self._last_update_time + 1e9
         ):
             self._last_update_time = time.monotonic_ns()
             self.update_time()
-
-        self.update_time()
 
     def get_local_time(self):
         """Returns the local time in seconds since Jan 1 1970, adjusted by the timezone offset"""
@@ -136,10 +139,8 @@ class Clock:
         now = time.time()
 
         if (
-            self._timezone_cache_until != 0
-            and now < self._timezone_cache_until
-            or not self._app.data.has_item(Clock.KEY_TIMEZONE)
-        ):
+            self._timezone_cache_until != 0 and now < self._timezone_cache_until
+        ) or not self._app.data.has_item(Clock.KEY_TIMEZONE):
             return
 
         try:
@@ -172,29 +173,63 @@ class Clock:
 
     def _calculate_color(self, now):
         """
-        Return different colors depending on the time's relationship to dawn or dusk.
+        Colors by solar phase. Expects ``solar`` in Data with ``sunrise`` and ``sunset``
+        as Unix epoch seconds in UTC (same basis as ``time.time()``).
 
-        Depends on "solar" being set in Data
+        When ``sunrise > sunset`` (HA: next sunset still today, next sunrise tomorrow),
+        ``now < sunrise - 1h`` is true for almost all of the local *day* because ``sunrise``
+        is tomorrow afternoon in Unix terms — that must not select night (red).
+
+        For ``now <= sunset`` in that case, use ``now > sunrise - 24h`` as "past the prior
+        dawn" → daytime (green) until sunset.
+
+        ``_solar_prev_sunrise`` + ``morning_after_roll`` still suppress stale pre-dawn blue
+        right after the sunrise field rolls forward.
         """
         solar = self._app.data.get_item(Clock.KEY_SOLAR)
         if solar is None:
-            return Clock.DEFAULT_COLOR
+            return Clock.NO_SOLAR_COLOR
 
         try:
-            if solar["sunset"] - 60 * 60 <= now <= solar["sunset"]:
-                return 0xFFA500  # orange
-
-            if solar["sunrise"] - 60 * 60 <= now <= solar["sunrise"]:
-                return 0x0000FF  # blue
-
-            if solar["sunset"] < solar["sunrise"] and now <= solar["sunset"]:
-                return 0x00FF00  # green
-
-            return 0xFF0000  # red
+            sunrise = solar["sunrise"]
+            sunset = solar["sunset"]
         except KeyError:
-            self._app.logger.error("clock:_calculate_color failed")
+            self._app.logger.error("clock:_calculate_color missing keys")
+            return Clock.NO_SOLAR_COLOR
 
-            return Clock.DEFAULT_COLOR
+        hour = 60 * 60
+        prev = self._solar_prev_sunrise
+        self._solar_prev_sunrise = sunrise
+
+        # HA-style: next sunset today, next sunrise tomorrow → unix sunrise > sunset
+        cross_midnight_pair = sunrise > sunset
+        # Publisher advanced ``sunrise`` to the next dawn; we're past the previous one → daytime
+        morning_after_roll = (
+            prev is not None and sunrise > prev + 3600 and now > prev and now <= sunset
+        )
+
+        if sunset - hour <= now <= sunset:
+            return Clock.COLOR_PRE_SUNSET
+        if sunrise - hour <= now <= sunrise and not morning_after_roll:
+            return Clock.COLOR_PRE_SUNRISE
+
+        if cross_midnight_pair:
+            if now <= sunset:
+                if now > sunrise - 24 * hour:
+                    return Clock.COLOR_DAY
+                return Clock.COLOR_NIGHT
+            if sunrise - hour <= now <= sunrise and not morning_after_roll:
+                return Clock.COLOR_PRE_SUNRISE
+            return Clock.COLOR_NIGHT
+
+        if sunrise >= sunset:
+            self._app.logger.error("clock:solar sunrise >= sunset, ignoring")
+            return Clock.NO_SOLAR_COLOR
+        if sunrise < now < sunset - hour:
+            return Clock.COLOR_DAY
+        if now > sunset or now < sunrise - hour:
+            return Clock.COLOR_NIGHT
+        return Clock.COLOR_DAY
 
     @property
     def timezone_offset(self) -> int:
@@ -208,17 +243,18 @@ class Clock:
 
         Depends on "solar" being set in Data
         """
-        solar = self._app.data.get_item("solar")
+        solar = self._app.data.get_item(Clock.KEY_SOLAR)
         if solar is None:
             return None
 
         now = time.time()
 
         try:
-            if solar["sunset"] - 30 * 60 <= now <= solar["sunset"]:
+            sunset = solar["sunset"]
+            if sunset - 30 * 60 <= now <= sunset:
                 return True
 
-            if now <= solar["sunset"]:
+            if now <= sunset:
                 return False
 
             return True

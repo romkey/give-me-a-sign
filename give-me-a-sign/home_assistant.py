@@ -38,6 +38,10 @@ class HomeAssistant:
         self._last_advertisement_time = 0
         self._advertisement_interval = 3600  # 1 hour in seconds
 
+    def set_mqtt_client(self, mqtt_client):
+        """Point discovery/publish at a new client after MQTT is rebuilt (e.g. WiFi restore)."""
+        self._mqtt_client = mqtt_client
+
     def create_autodiscovery_config(self):  # pylint: disable=too-many-locals
         """Generate Home Assistant MQTT autodiscovery configuration"""
 
@@ -79,7 +83,9 @@ class HomeAssistant:
             },
             "last_update": {
                 "name": "Last Update",
-                "value_template": "{{ value_json.time_utc }}",
+                "value_template": (
+                    "{{ as_datetime(value_json.time_utc).isoformat() }}"
+                ),
                 "device_class": "timestamp",
                 "icon": "mdi:clock",
             },
@@ -137,7 +143,7 @@ class HomeAssistant:
             },
             "uptime": {
                 "name": "Uptime",
-                "value_template": "{{ (value_json.uptime / 1000) | int }}",
+                "value_template": "{{ value_json.uptime | int }}",
                 "unit_of_measurement": "s",
                 "device_class": "duration",
                 "icon": "mdi:clock",
@@ -168,6 +174,18 @@ class HomeAssistant:
                 "command_topic": f"{self._base_topic}/reboot",
                 "payload_press": "reboot",
                 "icon": "mdi:restart",
+            }
+        }
+
+        switches = {
+            "display": {
+                "name": "Matrix display",
+                "command_topic": f"{self._base_topic}/display/set",
+                "state_topic": f"{self._base_topic}/display/state",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "icon": "mdi:monitor",
+                "entity_category": "config",
             }
         }
 
@@ -254,6 +272,27 @@ class HomeAssistant:
                 "payload_not_available": "offline",
                 "device": {"identifiers": [self._device_id]},
             }
+
+            autodiscovery_messages.append({"topic": topic, "payload": payload})
+
+        for switch_key, switch_config in switches.items():
+            topic = f"homeassistant/switch/{self._device_id}/{switch_key}/config"
+
+            payload = {
+                "name": switch_config["name"],
+                "command_topic": switch_config["command_topic"],
+                "state_topic": switch_config["state_topic"],
+                "payload_on": switch_config["payload_on"],
+                "payload_off": switch_config["payload_off"],
+                "icon": switch_config["icon"],
+                "unique_id": f"{self._device_id}_{switch_key}",
+                "availability_topic": self._availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "device": {"identifiers": [self._device_id]},
+            }
+            if "entity_category" in switch_config:
+                payload["entity_category"] = switch_config["entity_category"]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 

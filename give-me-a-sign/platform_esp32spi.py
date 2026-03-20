@@ -24,6 +24,10 @@ from ntp import AppNTP
 # from native_http_server import AppServer
 from mqtt import SignMQTT
 
+WIFI_RETRY_MIN_S = 5
+WIFI_RETRY_MAX_S = 90
+WIFI_FAILURES_BEFORE_RESET = 12
+
 
 class Platform:
     """
@@ -38,6 +42,10 @@ class Platform:
         self._ntp = None
         self._server = None
         self._mqtt = None
+        self._wifi_next_retry_at = 0.0
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_failures = 0
+        self._wifi_restored_flag = False
 
         spi = board.SPI()
         esp32_cs = DigitalInOut(board.ESP_CS)
@@ -66,15 +74,16 @@ class Platform:
             try:
                 self.esp.connect({"ssid": ssid, "password": password})
             except ConnectionError:
-                print("wifi failure")
+                print("wifi failure (will retry in background)")
                 print("scanning...")
                 for access_point in self.esp.scan_networks():
                     print(
                         f'\t{access_point["ssid"].decode()}\t\tRSSI: {access_point["rssi"]}'
                     )
-
-                time.sleep(5)
-                microcontroller.reset()
+                self._wifi_failures += 1
+                self._wifi_next_retry_at = time.monotonic() + self._wifi_backoff_s
+                self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
+                return
 
             print(
                 "MAC address ",
@@ -85,6 +94,47 @@ class Platform:
             )
 
         self._ntp = AppNTP(self.esp)
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_next_retry_at = 0.0
+        self._wifi_failures = 0
+
+    def _try_wifi_reconnect(self) -> None:
+        now = time.monotonic()
+        if now < self._wifi_next_retry_at:
+            return
+
+        ssid = os.getenv("wifi_ssid")
+        password = os.getenv("wifi_password")
+        if ssid is None or password is None:
+            return
+
+        print("WiFi reconnect attempt (ESP32SPI)")
+        try:
+            self.esp.connect({"ssid": ssid, "password": password})
+        except ConnectionError as error:
+            print("wifi reconnect failed:", error)
+            self._wifi_failures += 1
+            self._wifi_next_retry_at = now + self._wifi_backoff_s
+            self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
+            if self._wifi_failures >= WIFI_FAILURES_BEFORE_RESET:
+                print("WiFi: too many failures, resetting MCU")
+                time.sleep(2)
+                microcontroller.reset()
+            return
+
+        self._ntp = AppNTP(self.esp)
+        self._wifi_backoff_s = WIFI_RETRY_MIN_S
+        self._wifi_next_retry_at = 0.0
+        self._wifi_failures = 0
+        self._wifi_restored_flag = True
+        print("WiFi reconnected (ESP32SPI)")
+
+    def wifi_just_restored(self) -> bool:
+        """One-shot so MQTT can reconnect cleanly after ESP32SPI WiFi returns."""
+        if self._wifi_restored_flag:
+            self._wifi_restored_flag = False
+            return True
+        return False
 
     @property
     def wifi_is_connected(self) -> bool:
@@ -168,10 +218,19 @@ class Platform:
         """
         return self._server
 
+    @property
+    def mqtt_is_connected(self) -> bool:
+        if self._mqtt is None:
+            return False
+        return self._mqtt.is_connected_to_broker()
+
     def loop(self) -> None:
         """
         Perform any repetitive tasks necessary
         """
+        if not self.wifi_is_connected:
+            self._try_wifi_reconnect()
+
         if self._server:
             self._server.loop()
 

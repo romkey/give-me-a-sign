@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2023 John Romkey
 #
 # SPDX-License-Identifier: MIT
+import gc
+import time
 import traceback
 import board
 import displayio
@@ -45,13 +47,42 @@ display = framebufferio.FramebufferDisplay(matrix, rotation=0)
 app = GiveMeASign(display)
 app.start()
 
+# Throttle tight error loops (serial / USB); align with give_me_a_sign CP 10+ (traceback API).
+_LOOP_ERR_SLEEP_S = 0.5
+_OS_ERROR_BACKOFF_S = 1.0
+_MEMORY_ERR_BACKOFF_S = 2.0
+
+
+def _log_exception(prefix, err):
+    """Requires CircuitPython 10+ / Python 3.10+ (single-argument format_exception)."""
+    lines = traceback.format_exception(err)
+    print(prefix)
+    for line in lines:
+        print(line, end="")
+    try:
+        app.logger.error("".join(lines))
+    except Exception:  # pylint: disable=broad-exception-caught
+        print("logger.error failed while reporting exception")
+
+
 while True:
     try:
         app.loop()
+    except MemoryError:
+        print("MemoryError in app.loop(); gc.collect() and backing off")
+        gc.collect()
+        time.sleep(_MEMORY_ERR_BACKOFF_S)
+    except OSError as outer_exception:
+        try:
+            _log_exception("OSError in app.loop():", outer_exception)
+        except Exception as inner_exception:  # pylint: disable=broad-exception-caught
+            print("Failed while formatting OSError traceback:", inner_exception)
+            microcontroller.reset()
+        time.sleep(_OS_ERROR_BACKOFF_S)
     except Exception as outer_exception:  # pylint: disable=broad-exception-caught
         try:
-            print("General Exception 1", traceback.format_exception(outer_exception))
-            app.logger.error(traceback.format_exception(outer_exception))
+            _log_exception("Exception in app.loop():", outer_exception)
         except Exception as inner_exception:  # pylint: disable=broad-exception-caught
-            print("General Exception 2", traceback.format_exception(inner_exception))
+            print("Failed while formatting traceback:", inner_exception)
             microcontroller.reset()
+        time.sleep(_LOOP_ERR_SLEEP_S)
