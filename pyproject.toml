@@ -27,9 +27,8 @@ Homepage = "https://github.com/romkey/give-me-a-sign"
 Repository = "https://github.com/romkey/give-me-a-sign.git"
 Issues = "https://github.com/romkey/give-me-a-sign/issues"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["give_me_a_sign*"]
+[tool.setuptools]
+packages = ["give_me_a_sign"]
 
 [tool.setuptools.package-data]
 give_me_a_sign = ["assets/**"]
