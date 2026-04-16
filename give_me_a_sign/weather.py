@@ -235,10 +235,10 @@ class Weather:
         group.append(temp_text)
 
         try:
-            forecast_text = (
-                f'{int(weather["current"]["humidity"])}% '
-                f'{int(forecast["low"])}->{int(forecast["high"])}'
-            )
+            humidity = int(weather["current"]["humidity"])
+            low = int(forecast["low"])
+            high = int(forecast["high"])
+            forecast_text = "{}% {}->{}".format(humidity, low, high)
             high_low_text = adafruit_display_text.label.Label(
                 terminalio.FONT,
                 color=0x00FF00,
