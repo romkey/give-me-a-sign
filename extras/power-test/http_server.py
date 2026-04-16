@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: MIT
 
 # adapted from https://github.com/adafruit/Adafruit_CircuitPython_ESP32SPI/blob/main/examples/server/esp32spi_wsgiserver.py pylint: disable=line-too-long
+# pylint: disable=duplicate-code
 
 """
 Simple HTTP server, used by server.py to handle the HTTP
@@ -24,7 +25,7 @@ class SimpleWSGIApplication:
     CHUNK_SIZE = 8912  # max number of bytes to read at once when reading files
 
     def __init__(self, static_dir=None, debug=False):
-        self._debug = True
+        self._debug = debug
         self._listeners = {}
         self._start_response = None
         self._static = static_dir

@@ -1,0 +1,24 @@
+---
+description: This project targets CircuitPython (not CPython or MicroPython)
+alwaysApply: true
+---
+
+# CircuitPython runtime
+
+This codebase is written for **CircuitPython** on microcontrollers. It is **not** CPython (desktop/server Python) or MicroPython. APIs, stdlib availability, and behavior differ.
+
+- **Minimum version**: The main app (`give_me_a_sign`) requires **CircuitPython 10.x or later** (enforced at import). Match the library bundle to that major version.
+- **Libraries and docs**: Prefer the official bundle and docs at [CircuitPython libraries](https://circuitpython.org/libraries) and related Adafruit/CircuitPython guides.
+
+## Filesystem and I/O
+
+Do not assume CPython filesystem behavior (full `pathlib`, `os.walk`, arbitrary encoding, large file handling, etc.). Use patterns and libraries that work on **CIRCUITPY** (often under `/`, limited RAM, no full POSIX).
+
+- Prefer CircuitPython-compatible modules from the library bundle where applicable.
+- Avoid idioms that rely on CPython-only modules or semantics unless the file is explicitly host-only tooling (if such files exist, they should be clearly separated).
+
+## Network
+
+Do not assume `requests`, `urllib` in the CPython sense, or other desktop-only stacks. Use **CircuitPython** networking APIs and compatible libraries (e.g. `wifi`, `socketpool`, `ssl`, HTTP client patterns documented for CircuitPython / Adafruit libraries).
+
+When suggesting or writing code, verify it matches **CircuitPython** version constraints for the target board, not “it works on my laptop.”

@@ -31,6 +31,8 @@ __pycache__
 
 # Sphinx build-specific files
 _build
+build/
+dist/
 
 # This file results from running `pip -e install .` in a local repository
 *.egg-info
@@ -38,6 +40,7 @@ _build
 # Virtual environment-specific files
 .env
 .venv
+.venv-weather
 
 # MacOS-specific files
 *.DS_Store

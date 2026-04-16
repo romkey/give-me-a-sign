@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2023-2026 John Romkey
+#
+# SPDX-License-Identifier: MIT
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "circuitpython-give-me-a-sign"
+version = "0.5.1"
+description = "CircuitPython application library for Give Me A Sign LED matrix displays"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "John Romkey" }]
+keywords = ["adafruit", "blinka", "circuitpython", "micropython", "give-me-a-sign", "led-matrix"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: System :: Hardware",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/romkey/give-me-a-sign"
+Repository = "https://github.com/romkey/give-me-a-sign.git"
+Issues = "https://github.com/romkey/give-me-a-sign/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["give_me_a_sign*"]
+
+[tool.setuptools.package-data]
+give_me_a_sign = ["assets/**"]

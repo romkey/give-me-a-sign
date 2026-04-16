@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 John Romkey
+# SPDX-FileCopyrightText: 2023-2026 John Romkey
 #
 # SPDX-License-Identifier: MIT
 
@@ -10,7 +10,9 @@ rm -rf {.fseventsd,.Spotlight-V*}
 rm ._*
 cd lib
 rm ._*
-cd ../assets
+cd give_me_a_sign
+rm ._*
+cd assets
 rm ._*
 cd fonts
 rm ._*

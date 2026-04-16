@@ -10,7 +10,6 @@ give-me-a-sign/extras/power-test - application module for LED Matrix display
 """
 
 import time
-import gc
 import board
 import displayio
 import digitalio
@@ -89,4 +88,5 @@ class Power:
         )
 
     def loop(self):
+        """Run the HTTP server loop."""
         self.server.loop()

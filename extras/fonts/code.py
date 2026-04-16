@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 John Romkey
+# SPDX-FileCopyrightText: 2023-2026 John Romkey
 #
 # SPDX-License-Identifier: MIT
 
@@ -19,6 +19,8 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.scrolling_label import ScrollingLabel
 from adafruit_debouncer import Button
 from adafruit_matrixportal.matrix import Matrix
+
+from give_me_a_sign._paths import ASSETS_DIR
 
 # comment this line out if you want to turn autoreload on
 supervisor.runtime.autoreload = False
@@ -41,13 +43,14 @@ pin.pull = digitalio.Pull.UP
 down_button = Button(pin)
 
 TEXT = "0123456789:-_.AMPMampm"
-draw = True
-index = 0
+DRAW = True
+INDEX = 0
 
-print(os.listdir("/assets/fonts"))
+print(os.listdir(ASSETS_DIR + "/fonts"))
 
-files = [file for file in os.listdir("/assets/fonts") if file[0] != "."]
-# files = [file for file in os.listdir("/assets/fonts") if file[1] != "." and file[:-4] == ".bdf"]
+files = [file for file in os.listdir(ASSETS_DIR + "/fonts") if file[0] != "."]
+# Alternate filter:
+# files = [file for file in os.listdir(ASSETS_DIR + "/fonts") if file[:-4] == ".bdf"]
 
 print("files", files)
 files.sort()
@@ -62,27 +65,27 @@ while True:
     down_button.update()
 
     if up_button.pressed:
-        draw = True
-        index += 1
-        if index == len(files):
-            index = 0
+        DRAW = True
+        INDEX += 1
+        if INDEX == len(files):
+            INDEX = 0
 
     if down_button.pressed:
-        draw = True
-        index -= 1
-        if index == -1:
-            index = len(files) - 1
+        DRAW = True
+        INDEX -= 1
+        if INDEX == -1:
+            INDEX = len(files) - 1
 
-    if draw:
-        print(index, files[index])
+    if DRAW:
+        print(INDEX, files[INDEX])
 
-        font = bitmap_font.load_font(f"/assets/fonts/{files[index]}")
+        font = bitmap_font.load_font(ASSETS_DIR + "/fonts/" + files[INDEX])
         label = ScrollingLabel(
             font, text=TEXT, max_characters=len(TEXT), animate_time=0.5
         )
         label.y = 10
         display.root_group = label
-        draw = False
+        DRAW = False
         gc.collect()
 
     label.update()

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 John Romkey
+#
+# SPDX-License-Identifier: MIT
+
+name: Build CI
+
+on: [pull_request, push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run CircuitPython build checks
+        uses: adafruit/workflows-circuitpython-libs/build@main

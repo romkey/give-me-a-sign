@@ -14,7 +14,6 @@ power-test/server - web server module for LED Matrix display
 """
 
 import json
-import microcontroller
 
 import displayio
 from adafruit_display_shapes.rect import Rect
@@ -68,8 +67,8 @@ class Server:
         """
         try:
             self._wsgi_server.update_poll()
-        except OSError as e:
-            print("ESP failure, reset", e)
+        except OSError as error:
+            print("ESP failure, reset", error)
             self._app.esp.reset()
 
     def update(self, environ) -> list:
