@@ -1,0 +1,20 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: give-me-a-sign
+Upstream-Contact: John Romkey
+Source: https://github.com/romkey/give-me-a-sign
+
+Files: give_me_a_sign/assets/w/*.bmp
+Copyright: 2023-2026 John Romkey
+License: CC0-1.0
+
+Files: examples/assets/w/weather_icons_preview.png
+Copyright: 2023-2026 John Romkey
+License: CC0-1.0
+
+Files: examples/assets/w/README.md
+Copyright: 2023-2026 John Romkey
+License: MIT
+
+Files: .cursor/rules/circuitpython.mdc
+Copyright: 2023-2026 John Romkey
+License: MIT
