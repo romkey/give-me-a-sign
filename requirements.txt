@@ -2,16 +2,16 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-adafruit_bitmap_font
-adafruit_display_text
-adafruit_imageload
-adafruit_logging
-adafruit_debouncer
-adafruit_register
-adafruit_ds3231
-adafruit_pcf8523
-adafruit_esp32spi
-adafruit_httpserver
-adafruit_ntp
-adafruit_minimqtt
-adafruit_connection_manager
+adafruit-circuitpython-bitmap-font
+adafruit-circuitpython-display-text
+adafruit-circuitpython-imageload
+adafruit-circuitpython-logging
+adafruit-circuitpython-debouncer
+adafruit-circuitpython-register
+adafruit-circuitpython-ds3231
+adafruit-circuitpython-pcf8523
+adafruit-circuitpython-esp32spi
+adafruit-circuitpython-httpserver
+adafruit-circuitpython-ntp
+adafruit-circuitpython-minimqtt
+adafruit-circuitpython-connectionmanager

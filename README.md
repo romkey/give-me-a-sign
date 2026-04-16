@@ -156,7 +156,7 @@ https://circuitpython.org/board/matrixportal_m4/
 ## Installation
 
 1. Install CircuitPython on the board and mount `CIRCUITPY`.
-2. Install libraries: from this repo run `circup install -r requirements.txt ./give_me_a_sign --py --upgrade` so bundle dependencies and the `give_me_a_sign` package are copied to `lib/`.
+2. Install libraries: from this repo run `circup install -r requirements-circuitpython.txt ./give_me_a_sign --py --upgrade` so bundle dependencies and the `give_me_a_sign` package are copied to `lib/`.
 3. Copy `examples/code.py` to the root of `CIRCUITPY` (or merge into your own `code.py`), and add `settings.toml` / environment as needed.
 
 ## API
