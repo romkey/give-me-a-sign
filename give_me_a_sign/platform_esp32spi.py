@@ -26,6 +26,9 @@ from .mqtt import SignMQTT
 
 WIFI_RETRY_MIN_S = 5
 WIFI_RETRY_MAX_S = 90
+# after this many consecutive failures, hard-reset the AirLift co-processor
+# (it can wedge in a state only its reset pin recovers from)
+WIFI_FAILURES_BEFORE_ESP_RESET = 4
 WIFI_FAILURES_BEFORE_RESET = 12
 
 
@@ -71,15 +74,20 @@ class Platform:
                 print("wifi_ssid or wifi_password not set in secrets.toml")
                 return
 
+            # RuntimeError/OSError cover the ESP32SPI layer wedging or timing
+            # out, not just a failed association
             try:
                 self.esp.connect({"ssid": ssid, "password": password})
-            except ConnectionError:
-                print("wifi failure (will retry in background)")
-                print("scanning...")
-                for access_point in self.esp.scan_networks():
-                    print(
-                        f'\t{access_point["ssid"].decode()}\t\tRSSI: {access_point["rssi"]}'
-                    )
+            except (OSError, RuntimeError) as error:
+                print("wifi failure (will retry in background):", error)
+                try:
+                    print("scanning...")
+                    for access_point in self.esp.scan_networks():
+                        print(
+                            f'\t{access_point["ssid"].decode()}\t\tRSSI: {access_point["rssi"]}'
+                        )
+                except (OSError, RuntimeError):
+                    print("scan failed")
                 self._wifi_failures += 1
                 self._wifi_next_retry_at = time.monotonic_ns() + int(
                     self._wifi_backoff_s * 1e9
@@ -114,11 +122,17 @@ class Platform:
         print("WiFi reconnect attempt (ESP32SPI)")
         try:
             self.esp.connect({"ssid": ssid, "password": password})
-        except ConnectionError as error:
+        except (OSError, RuntimeError) as error:
             print("wifi reconnect failed:", error)
             self._wifi_failures += 1
             self._wifi_next_retry_at = now + int(self._wifi_backoff_s * 1e9)
             self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
+            if self._wifi_failures == WIFI_FAILURES_BEFORE_ESP_RESET:
+                print("WiFi: hard-resetting the AirLift co-processor")
+                try:
+                    self.esp.reset()
+                except (OSError, RuntimeError) as reset_error:
+                    print("AirLift reset failed:", reset_error)
             if self._wifi_failures >= WIFI_FAILURES_BEFORE_RESET:
                 print("WiFi: too many failures, resetting MCU")
                 time.sleep(2)
@@ -143,8 +157,15 @@ class Platform:
     def wifi_is_connected(self) -> bool:
         """
         Return whether wifi is currently connected or not
+
+        Treats a wedged/unresponsive AirLift as "not connected": if the
+        exception escaped it would abort every app loop pass, freezing the
+        sign with no reconnect attempts and no recovery reset
         """
-        return self.esp.is_connected
+        try:
+            return self.esp.is_connected
+        except (OSError, RuntimeError):
+            return False
 
     @property
     def wifi_ssid(self) -> str:
@@ -200,10 +221,10 @@ class Platform:
         """
         Get the current time in UTC from NTP
         """
-        if self._ntp is not None:
-            return self._ntp.update()
+        if self._ntp is None or not self.wifi_is_connected:
+            return None
 
-        return None
+        return self._ntp.update()
 
     def start_servers(self) -> None:
         """

@@ -449,14 +449,17 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
     def _set_countdown(self, seconds) -> None:
         """
         Sets the state machine's countdown in seconds
+
+        Uses the monotonic clock: time.time() jumps when NTP corrects the
+        RTC, which could freeze the sign on one screen for hours
         """
-        self._countdown_time = time.time() + seconds
+        self._countdown_time = time.monotonic_ns() + seconds * 1_000_000_000
 
     def _is_time_up(self) -> bool:
         """
         Returns whether the state machine's current countdown has completed
         """
-        return time.time() > self._countdown_time
+        return time.monotonic_ns() > self._countdown_time
 
     def _next_up(self, state, duration) -> None:
         """

@@ -105,6 +105,12 @@ class AppServer:
         """
         self._http_server.poll()
 
+    def stop(self) -> None:
+        """
+        Stop the server and close its listening socket so it can be rebuilt
+        """
+        self._http_server.stop()
+
     def store_data(self, request, key) -> list:
         """
         Reusable generic handler called by several routes, which

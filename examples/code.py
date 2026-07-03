@@ -44,8 +44,17 @@ matrix = rgbmatrix.RGBMatrix(
 )
 display = framebufferio.FramebufferDisplay(matrix, rotation=0)
 
-app = GiveMeASign(display)
-app.start()
+# If startup fails (transient WiFi/hardware trouble), reset and try again
+# rather than leaving a headless sign dead until someone power-cycles it.
+# A persistent config error becomes a slow boot loop, visible on serial.
+try:
+    app = GiveMeASign(display)
+    app.start()
+except Exception as startup_error:  # pylint: disable=broad-exception-caught
+    print("Fatal error during startup:", startup_error)
+    traceback.print_exception(startup_error)
+    time.sleep(30)
+    microcontroller.reset()
 
 # Throttle tight error loops (serial / USB); align with give_me_a_sign CP 10+ (traceback API).
 _LOOP_ERR_SLEEP_S = 0.5

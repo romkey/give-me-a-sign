@@ -299,8 +299,14 @@ class Clock:
         updated_time = self._app.platform.ntp_sync()
         print(f"ntp_sync {updated_time}")
         if updated_time is not None:
-            self._app.rtc.datetime = updated_time
             next_attempt = refresh_interval
+            # a flaky hardware RTC (I2C) must not escape: an uncaught error
+            # here would leave _next_ntp_attempt unset and retry every pass
+            try:
+                self._app.rtc.datetime = updated_time
+            except OSError as error:
+                print("failed to set RTC:", error)
+                next_attempt = Clock.NTP_FAILURE_RETRY_INTERVAL
         else:
             next_attempt = Clock.NTP_FAILURE_RETRY_INTERVAL
 

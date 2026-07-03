@@ -81,12 +81,8 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         else:
             print("WiFi NOT connected!")
 
-        self._build_mqtt_client()
-        try:
-            self._mqtt_connect_and_subscribe()
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT initial connect failed:", error)
-            self._on_mqtt_failure()
+        # one connect path for initial connect, retries and rebuilds
+        self._maybe_retry_mqtt()
 
     def _build_mqtt_client(self):
         socket = self._platform.get_socket()
@@ -116,6 +112,10 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
                 password=os.getenv("MQTT_PASSWORD"),
                 socket_pool=socket,
                 socket_timeout=0.25,
+                # a single bounded attempt per connect() call; otherwise
+                # MiniMQTT retries internally with sleeps of up to ~30s each,
+                # freezing the display. SignMQTT owns the retry/backoff policy.
+                connect_retries=1,
             )
             self._mqtt_loop_timeout = 0.25
 
@@ -180,7 +180,21 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             print("MQTT: too many consecutive failures, resetting MCU")
             microcontroller.reset()
 
+    def _teardown_client(self):
+        """Discard the MQTT client; _maybe_retry_mqtt() will build a fresh one."""
+        try:
+            if self._mqtt is not None:
+                self._mqtt.disconnect()
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        self._mqtt = None
+
     def _maybe_retry_mqtt(self):
+        """
+        (Re)connect if the backoff timer allows it. This is the only path
+        that connects, so a failure can never wedge the caller: it just
+        schedules the next attempt.
+        """
         if time.monotonic_ns() < self._mqtt_next_retry_at:
             return
         try:
@@ -188,22 +202,17 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
                 self._build_mqtt_client()
             self._mqtt_connect_and_subscribe()
         except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT reconnect failed:", error)
+            print("MQTT connect failed:", error)
+            # a half-connected client can't be trusted; rebuild next attempt
+            self._teardown_client()
             self._on_mqtt_failure()
 
     def _rebuild_mqtt_after_wifi(self):
-        try:
-            if self._mqtt is not None:
-                self._mqtt.disconnect()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
-        self._mqtt = None
-        self._build_mqtt_client()
-        try:
-            self._mqtt_connect_and_subscribe()
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT rebuild after WiFi failed:", error)
-            self._on_mqtt_failure()
+        """WiFi came back: the old sockets are dead, so start over immediately."""
+        self._teardown_client()
+        self._mqtt_backoff_s = MQTT_RETRY_MIN_S
+        self._mqtt_next_retry_at = 0
+        self._maybe_retry_mqtt()
 
     def is_connected_to_broker(self) -> bool:
         """Return whether the MQTT client is currently connected."""
@@ -330,15 +339,10 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
                 self._next_diagnostic_time = time.monotonic_ns() + int(60e9)
 
             self._mqtt.loop(self._mqtt_loop_timeout)
-        except BrokenPipeError as error:
-            print("MQTT BrokenPipeError", error)
-            try:
-                if self._mqtt is not None:
-                    self._mqtt.disconnect()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
-            self._mqtt = None
-            self._on_mqtt_failure()
-        except (OSError, RuntimeError, MQTT.MMQTTException) as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            # Any failure here (dead socket, wedged client, bad ap_info race)
+            # gets the same treatment: drop the client and reconnect with
+            # backoff. Never let it escape and starve the display loop.
             print("MQTT loop error:", error)
+            self._teardown_client()
             self._on_mqtt_failure()
