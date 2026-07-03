@@ -15,6 +15,19 @@ from give_me_a_sign import GiveMeASign
 
 """
 Example of how you might use GiveMeASign() module
+
+Display geometry is configurable in settings.toml for larger displays
+built from multiples of the standard 64x32 panel:
+
+    MATRIX_WIDTH = 128         # total pixels across (chained panels)
+    MATRIX_PANEL_HEIGHT = 32   # rows per panel: 32, or 64 (needs ADDR E jumper)
+    MATRIX_TILE = 2            # rows of panels stacked vertically
+    MATRIX_SERPENTINE = true   # alternate panel rows rotated 180 degrees
+    MATRIX_BIT_DEPTH = 2       # more depth = more colors, more RAM/CPU
+
+The example above drives a 128x64 display made of four 64x32 panels,
+two across and two down. Content is laid out on a 64x32 canvas and
+integer-scaled to fit, so no other configuration is needed.
 """
 
 # board.DISPLAY.root_group = None
@@ -24,11 +37,32 @@ supervisor.runtime.autoreload = False
 
 print("hello world")
 
+MATRIX_WIDTH = supervisor.get_setting("MATRIX_WIDTH", 64)
+MATRIX_PANEL_HEIGHT = supervisor.get_setting("MATRIX_PANEL_HEIGHT", 32)
+MATRIX_TILE = supervisor.get_setting("MATRIX_TILE", 1)
+MATRIX_SERPENTINE = supervisor.get_setting("MATRIX_SERPENTINE", True)
+MATRIX_BIT_DEPTH = supervisor.get_setting("MATRIX_BIT_DEPTH", 2)
+
+if MATRIX_WIDTH % 64 != 0 or MATRIX_WIDTH < 64:
+    raise ValueError("MATRIX_WIDTH must be a positive multiple of 64")
+if MATRIX_PANEL_HEIGHT not in (32, 64):
+    raise ValueError("MATRIX_PANEL_HEIGHT must be 32 or 64")
+if MATRIX_TILE < 1:
+    raise ValueError("MATRIX_TILE must be at least 1")
+
+# 64-row panels need a fifth address line (close the ADDR E jumper on the
+# panel and use a board that provides it, e.g. MatrixPortal S3)
+addr_pins = [board.MTX_ADDRA, board.MTX_ADDRB, board.MTX_ADDRC, board.MTX_ADDRD]
+if MATRIX_PANEL_HEIGHT == 64:
+    if not hasattr(board, "MTX_ADDRE"):
+        raise ValueError("64-row panels need MTX_ADDRE, which this board lacks")
+    addr_pins.append(board.MTX_ADDRE)
+
 displayio.release_displays()
 matrix = rgbmatrix.RGBMatrix(
-    width=64,
-    height=32,
-    bit_depth=2,
+    width=MATRIX_WIDTH,
+    height=MATRIX_PANEL_HEIGHT * MATRIX_TILE,
+    bit_depth=MATRIX_BIT_DEPTH,
     rgb_pins=[
         board.MTX_R1,
         board.MTX_G1,
@@ -37,10 +71,12 @@ matrix = rgbmatrix.RGBMatrix(
         board.MTX_G2,
         board.MTX_B2,
     ],
-    addr_pins=[board.MTX_ADDRA, board.MTX_ADDRB, board.MTX_ADDRC, board.MTX_ADDRD],
+    addr_pins=addr_pins,
     clock_pin=board.MTX_CLK,
     latch_pin=board.MTX_LAT,
     output_enable_pin=board.MTX_OE,
+    tile=MATRIX_TILE,
+    serpentine=MATRIX_SERPENTINE,
 )
 display = framebufferio.FramebufferDisplay(matrix, rotation=0)
 

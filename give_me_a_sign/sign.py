@@ -75,6 +75,12 @@ GC_INTERVAL_NS = 5 * 1_000_000_000
 LOW_MEMORY_LOG_INTERVAL_NS = 30 * 1_000_000_000
 DEBUG = False
 
+# All modules lay out their content on a virtual 64x32 canvas (one standard
+# panel). On larger displays - chained/tiled multiples of 64x32 - the canvas
+# is integer-scaled and centered, so everything renders correctly at any size.
+CANVAS_WIDTH = 64
+CANVAS_HEIGHT = 32
+
 
 class States:  # pylint: disable=too-few-public-methods
     """
@@ -110,6 +116,16 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self.display = display
         self.display.root_group = None
 
+        # integer scale factor from the 64x32 virtual canvas to the physical
+        # display, and offsets to center it (non-proportional sizes like
+        # 128x32 scale by the common factor and letterbox the rest)
+        self._canvas_scale = max(
+            1, min(display.width // CANVAS_WIDTH, display.height // CANVAS_HEIGHT)
+        )
+        self._canvas_x = (display.width - CANVAS_WIDTH * self._canvas_scale) // 2
+        self._canvas_y = (display.height - CANVAS_HEIGHT * self._canvas_scale) // 2
+        self._canvas_container = None
+
         self._setup_buttons()
         self._setup_rtc()
 
@@ -125,6 +141,43 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self._blank_group = None
         self._next_gc_time = 0
         self._next_low_memory_log_time = 0
+
+    @property
+    def canvas_width(self) -> int:
+        """Width of the virtual canvas that modules lay their content out on"""
+        return CANVAS_WIDTH
+
+    @property
+    def canvas_height(self) -> int:
+        """Height of the virtual canvas that modules lay their content out on"""
+        return CANVAS_HEIGHT
+
+    def show_group(self, group) -> None:
+        """
+        Show a group laid out in virtual canvas (64x32) coordinates,
+        scaled and centered to fit the physical display.
+
+        Modules should use this instead of setting display.root_group
+        directly so they work on any display size.
+        """
+        if self._canvas_scale == 1 and self._canvas_x == 0 and self._canvas_y == 0:
+            self.display.root_group = group
+            return
+
+        if self._canvas_container is None:
+            self._canvas_container = displayio.Group(
+                scale=self._canvas_scale, x=self._canvas_x, y=self._canvas_y
+            )
+
+        container = self._canvas_container
+        # re-showing the group that's already on screen (e.g. the clock's
+        # persistent group) must not re-append it
+        if not (len(container) == 1 and container[0] is group):
+            while len(container) > 0:
+                container.pop()
+            container.append(group)
+
+        self.display.root_group = container
 
     def _ensure_blank_group(self):
         """Lazily build a full-frame black group for display-off mode."""
@@ -290,11 +343,11 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             line = adafruit_display_text.label.Label(
                 terminalio.FONT, color=0xFF0000, text=msg
                 )
-            line.y = self.display.height // 2
+            line.y = self.canvas_height // 2
 
             group = displayio.Group()
             group.append(line)
-            self.display.root_group = group
+            self.show_group(group)
 
             print("HALT")
             while True:
@@ -306,11 +359,11 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             line = adafruit_display_text.label.Label(
                 terminalio.FONT, color=0xFF0000, text=msg
                 )
-            line.y = self.display.height // 2
+            line.y = self.canvas_height // 2
 
             group = displayio.Group()
             group.append(line)
-            self.display.root_group = group
+            self.show_group(group)
 
             time.sleep(2)
             microcontroller.reset()

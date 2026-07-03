@@ -68,6 +68,28 @@ M4](https://www.adafruit.com/product/4745) board connected to a 64x32
 LED matrix. It should work with other Adafruit Matrix products but it
 hasn't been tested with them and might need adapting.
 
+### Larger displays
+
+Displays built from multiples of the standard 64x32 panel are supported:
+chain panels for more width, stack ("tile") them for more height, or use
+64-row panels (which need the ADDR E jumper closed and a board that
+provides the fifth address line, like the MatrixPortal S3). Configure the
+geometry in `settings.toml`:
+
+```toml
+MATRIX_WIDTH = 128         # total pixels across (chained panels)
+MATRIX_PANEL_HEIGHT = 32   # rows per panel: 32, or 64 (needs ADDR E)
+MATRIX_TILE = 2            # rows of panels stacked vertically
+MATRIX_SERPENTINE = true   # alternate panel rows rotated 180 degrees
+MATRIX_BIT_DEPTH = 2       # color depth; higher uses more RAM/CPU
+```
+
+Content is laid out on a virtual 64x32 canvas and integer-scaled to fit
+the display, centered. Sizes that aren't proportional to 64x32 (say
+128x32) scale by the common factor and letterbox the rest. Images pushed
+to the `image` endpoint that are larger than 64x32 are shown unscaled at
+the display's native resolution.
+
 ## Software
 
 This project is written in CircuitPython. It depends on several

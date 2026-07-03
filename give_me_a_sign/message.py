@@ -67,16 +67,16 @@ class Message:
 
         box = line.bounding_box
         width = box[2]
-        if width > self._app.display.width:
+        if width > self._app.canvas_width:
             line.x = 0
         else:
-            line.x = round((self._app.display.width - width) / 2)
+            line.x = round((self._app.canvas_width - width) / 2)
 
-        line.y = self._app.display.height // 2
+        line.y = self._app.canvas_height // 2
 
         group = displayio.Group()
         group.append(line)
-        self._app.display.root_group = group
+        self._app.show_group(group)
         return True
 
     def loop(self) -> None:  # pylint: disable=no-self-use

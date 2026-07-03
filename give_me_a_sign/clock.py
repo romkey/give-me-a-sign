@@ -86,9 +86,9 @@ class Clock:
         # returns [x, y, width, height]
         bb_width = self._clock_label.bounding_box[2]
 
-        self._clock_label.x = round(self._app.display.width / 2 - bb_width / 2)
-        self._clock_label.y = self._app.display.height // 2
-        self._app.display.root_group = self._group
+        self._clock_label.x = round(self._app.canvas_width / 2 - bb_width / 2)
+        self._clock_label.y = self._app.canvas_height // 2
+        self._app.show_group(self._group)
 
     def mini_clock(self) -> Label:
         """Create and return a label with the current time rendered into it in a small font"""

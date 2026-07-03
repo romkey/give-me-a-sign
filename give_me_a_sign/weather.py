@@ -259,7 +259,7 @@ class Weather:
         high_low_text.y = 24
         group.append(high_low_text)
 
-        self._app.display.root_group = group
+        self._app.show_group(group)
         return True
 
     @staticmethod

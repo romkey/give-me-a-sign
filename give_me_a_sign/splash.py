@@ -43,9 +43,12 @@ class Splash:
             return False
 
         tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)
+        # center images smaller than the canvas (e.g. nyan-16.bmp)
+        tile_grid.x = max(0, (self._app.canvas_width - bitmap.width) // 2)
+        tile_grid.y = max(0, (self._app.canvas_height - bitmap.height) // 2)
         group = displayio.Group()
         group.append(tile_grid)
-        self._app.display.root_group = group
+        self._app.show_group(group)
         return True
 
     def loop(self) -> None:  # pylint: disable=no-self-use

@@ -40,13 +40,13 @@ class IP:
 
         box = self._line.bounding_box
         width = box[2]
-        if width > self._app.display.width:
+        if width > self._app.canvas_width:
             self._line.x = 0
         else:
-            self._line.x = round((self._app.display.width - width) / 2)
+            self._line.x = round((self._app.canvas_width - width) / 2)
 
-        self._line.y = self._app.display.height // 2
-        self._app.display.root_group = self._line
+        self._line.y = self._app.canvas_height // 2
+        self._app.show_group(self._line)
 
         return True
 

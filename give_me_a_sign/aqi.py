@@ -68,11 +68,11 @@ class AQI:
         group.append(line)
 
         mini_clock_width = mini_clock.bounding_box[2]
-        mini_clock.x = 64 - mini_clock_width
+        mini_clock.x = self._app.canvas_width - mini_clock_width
         mini_clock.y = 2
         group.append(mini_clock)
 
-        self._app.display.root_group = group
+        self._app.show_group(group)
 
         return True
 
