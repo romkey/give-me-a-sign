@@ -37,6 +37,7 @@ class Clock:
     KEY_SOLAR = "solar"
 
     DEFAULT_NTP_REFRESH_INTERVAL = 60 * 60 * 6
+    NTP_FAILURE_RETRY_INTERVAL = 5 * 60
     # Shown when solar JSON is missing or invalid (distinct from intentional night green)
     NO_SOLAR_COLOR = 0xFFAA00
     COLOR_DAY = 0x00FF00
@@ -56,8 +57,9 @@ class Clock:
         font = bitmap_font.load_font(ASSETS_DIR + "/IBMPlexMono-Medium-24_jep.bdf")
         self._clock_label = Label(font)
         self._group.append(self._clock_label)
+        self._mini_font = None
 
-        self._last_ntp_check = None
+        self._next_ntp_attempt = 0
         self._ntp_update()
 
         self._last_update_time = None
@@ -90,11 +92,12 @@ class Clock:
 
     def mini_clock(self) -> Label:
         """Create and return a label with the current time rendered into it in a small font"""
-        font = bitmap_font.load_font(
-            ASSETS_DIR + "/fonts/intelone-mono-font-family-regular-6.bdf"
-        )
-        #        font = bitmap_font.load_font(ASSETS_DIR + "/fonts/Segment7Standard.bdf")
-        label = Label(font)
+        if self._mini_font is None:
+            # loading a BDF font is slow and allocates; do it once and reuse
+            self._mini_font = bitmap_font.load_font(
+                ASSETS_DIR + "/fonts/intelone-mono-font-family-regular-6.bdf"
+            )
+        label = Label(self._mini_font)
 
         self.clock(label)
 
@@ -107,13 +110,9 @@ class Clock:
         - call NTP if needed
         - update the display if needed (once per second)
         """
-        if (
-            self._last_ntp_check is None
-            or time.time() > self._last_ntp_check + 60 * 60 * 3
-        ):
+        if time.monotonic_ns() >= self._next_ntp_attempt:
             print("NTP update")
             self._ntp_update()
-            self._last_ntp_check = time.time()
 
         if (
             self._last_update_time is None
@@ -241,29 +240,44 @@ class Clock:
     @property
     def is_sundown(self) -> bool:
         """
-        Return True if the sun is currently down
+        Return True if the sun is currently down (or will be within 30 minutes),
+        False if it's up or we don't have solar data
+
+        Handles HA-style data where sunrise/sunset are the *next* events, so
+        after sunset rolls forward both timestamps are in the future and
+        ``sunrise < sunset`` means it's currently night.
 
         Depends on "solar" being set in Data
         """
         solar = self._app.data.get_item(Clock.KEY_SOLAR)
         if solar is None:
-            return None
+            return False
 
         now = time.time()
 
         try:
+            sunrise = solar["sunrise"]
             sunset = solar["sunset"]
-            if sunset - 30 * 60 <= now <= sunset:
-                return True
-
-            if now <= sunset:
-                return False
-
-            return True
         except KeyError:
             return False
 
+        # last 30 minutes of daylight count as sundown
+        if sunset - 30 * 60 <= now <= sunset:
+            return True
+
+        if sunrise > sunset:
+            # next sunrise is after next sunset: it's currently daytime
+            return False
+
+        # normal ordering (e.g. static data with today's times): night if
+        # before sunrise or after sunset
+        return now < sunrise or now > sunset
+
     def _ntp_update(self) -> None:
+        """
+        Attempt an NTP sync and schedule the next attempt: after
+        refresh_interval on success, or NTP_FAILURE_RETRY_INTERVAL on failure
+        """
         print("NTP Update")
 
         ntp_data = self._app.data.get_item(
@@ -275,25 +289,19 @@ class Clock:
         )
 
         try:
-            refresh_interval = ntp_data["refresh_interval"]
-        except KeyError:
+            refresh_interval = int(ntp_data["refresh_interval"])
+        except (KeyError, TypeError, ValueError):
             refresh_interval = Clock.DEFAULT_NTP_REFRESH_INTERVAL
 
-        if (
-            self._last_ntp_check is not None
-            and refresh_interval != 0
-            and time.time() - self._last_ntp_check < refresh_interval
-        ):
-            return
-
-        #        try:
-        #            server = ntp_data["server"]
-        #            ntp = NTP(self._app.esp, server)
-        #        except KeyError:
-        #            ntp = NTP(self._app.esp)
+        if refresh_interval <= 0:
+            refresh_interval = Clock.DEFAULT_NTP_REFRESH_INTERVAL
 
         updated_time = self._app.platform.ntp_sync()
         print(f"ntp_sync {updated_time}")
         if updated_time is not None:
-            self._last_ntp_check = time.time()
             self._app.rtc.datetime = updated_time
+            next_attempt = refresh_interval
+        else:
+            next_attempt = Clock.NTP_FAILURE_RETRY_INTERVAL
+
+        self._next_ntp_attempt = time.monotonic_ns() + next_attempt * 1_000_000_000

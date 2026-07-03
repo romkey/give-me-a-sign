@@ -43,11 +43,14 @@ class Message:
         Data structure should look like:
 
         .. code-block:: python
-           { "message": text,
+           { "text": string,
              "color": 0x000000,
-             "duration": seconds,
-             "scroll": true/false
+             "duration": seconds
             }
+
+        "duration" is optional (how long the sign shows the message;
+        the state machine defaults to 15 seconds). Scrolling is not
+        implemented.
         """
 
         self._app.data.clear_updated(Message.KEY)

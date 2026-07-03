@@ -49,17 +49,19 @@ class UV:
         uvi = self._app.data.get_item(UV.KEY)
         self._app.data.clear_updated(UV.KEY)
 
-        if uvi is None or uvi["index"] == 0:
+        try:
+            index = uvi["index"]
+        except (TypeError, KeyError):
             return False
 
-        try:
-            line = adafruit_display_text.label.Label(
-                terminalio.FONT,
-                color=0x800080,
-                text="UVI " + str(int(uvi["index"] * 10) / 10.0),
-            )
-        except KeyError:
+        if index == 0:
             return False
+
+        line = adafruit_display_text.label.Label(
+            terminalio.FONT,
+            color=0x800080,
+            text="UVI " + str(int(index * 10) / 10.0),
+        )
 
         line.x = 0
         line.y = 12

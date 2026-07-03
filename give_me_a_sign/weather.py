@@ -81,16 +81,25 @@ OWM_ID_TO_ICON = {
 _LEGACY_CONDITIONS_ICON = {
     "sunny": "01d",
     "clear": "01d",
+    "clearnight": "01n",
     "cloudy": "03d",
     "partlycloudy": "02d",
-    "partly_cloudy": "02d",
     "rain": "10d",
+    "rainy": "10d",
     "lightrain": "10d",
+    "pouring": "09d",
     "thunder": "11d",
+    "lightning": "11d",
+    "lightningrainy": "11d",
     "thunderstorm": "11d",
     "snow": "13d",
+    "snowyrainy": "13d",
+    "hail": "13d",
     "mist": "50d",
     "fog": "50d",
+    "windy": "50d",
+    "windyvariant": "50d",
+    "exceptional": "50d",
 }
 
 
@@ -148,7 +157,7 @@ class Weather:
                     return mapped
 
         if isinstance(raw, str):
-            key = raw.strip().lower().replace(" ", "").replace("-", "")
+            key = raw.strip().lower().replace(" ", "").replace("-", "").replace("_", "")
             if key in _LEGACY_CONDITIONS_ICON:
                 return _LEGACY_CONDITIONS_ICON[key]
             raw_stem = raw.strip().lower()
@@ -171,28 +180,27 @@ class Weather:
         Data structure should look like:
 
         .. code-block:: python
-        current weather (OpenWeatherMap-friendly):
-           {
-             conditions: 500,
-             icon: "10d",
-             condition_id: 500,
-             temperature: 79,
-             humidity: 45,
-             pressure: 1112
+        current weather (key "weather", OpenWeatherMap-friendly):
+           { "current":
+             {
+               conditions: 500,
+               icon: "10d",
+               condition_id: 500,
+               temperature: 79,
+               humidity: 45,
+               pressure: 1112
+             }
            }
 
         Use ``icon`` from the API when present (required for clear night ``01n`` vs ``01d``).
         ``conditions`` may be a legacy name (``sunny``) or numeric condition id string.
-        forecast:
+        forecast (key "forecast"):
            {
-             conditions: 'sunny|cloudy|rain|thunder|snow',
-             low_temperature: 55,
-             high_temperature: 79,
-             humidity: 45,
-             pressure: 1112
+             low: 55,
+             high: 79
             }
 
-        Temperatures and humidity may be floating point. Pressure is optional
+        Temperatures and humidity may be floating point.
         """
         weather = self._app.data.get_item("weather")
         forecast = self._app.data.get_item("forecast")

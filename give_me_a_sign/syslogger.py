@@ -8,6 +8,10 @@
 
 * Author: John Romkey
 
+NOTE: this handler only works on the ESP32SPI (AirLift) platform - it
+imports the ESP32SPI socket module at the top level and would need to be
+ported to socketpool before it can be used with native WiFi.
+
 LEVELS = [
     (00, "NOTSET"),
     (10, "DEBUG"),

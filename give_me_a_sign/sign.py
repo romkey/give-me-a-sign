@@ -12,11 +12,12 @@ give_me_a_sign.sign — application module for LED Matrix display
 
 import sys
 
-_MIN_CIRCUITPYTHON = (10, 0, 0)
+# 10.2 adds supervisor.get_setting(), used for typed settings.toml values
+_MIN_CIRCUITPYTHON = (10, 2, 0)
 
 
 def _require_circuitpython_version():
-    """Fail fast on unsupported CircuitPython (CP 10+). Skip on CPython for local tooling."""
+    """Fail fast on unsupported CircuitPython (CP 10.2+). Skip on CPython for local tooling."""
     if getattr(sys.implementation, "name", "") != "circuitpython":
         return
     ver = sys.implementation.version
@@ -24,7 +25,8 @@ def _require_circuitpython_version():
         vstr = ".".join(str(x) for x in ver)
         raise RuntimeError(
             "Give Me A Sign requires CircuitPython "
-            f"{_MIN_CIRCUITPYTHON[0]}.x or later (this build is {vstr})."
+            f"{_MIN_CIRCUITPYTHON[0]}.{_MIN_CIRCUITPYTHON[1]} or later "
+            f"(this build is {vstr})."
         )
 
 
@@ -60,6 +62,7 @@ from .clock import Clock
 from .greet import Greet
 from .splash import Splash
 from .weather import Weather
+from .image import Image
 from .ip import IP
 from .tones import Tones
 from .message import Message
@@ -67,9 +70,9 @@ from .uv import UV
 from .aqi import AQI
 from .pollen import Pollen
 
-HTTP_SERVER_SOCKET_NUMBER = 0
-NTP_SOCKET_NUMBER = 1
 FREE_MEMORY_LIMIT = 10000
+GC_INTERVAL_NS = 5 * 1_000_000_000
+LOW_MEMORY_LOG_INTERVAL_NS = 30 * 1_000_000_000
 DEBUG = False
 
 
@@ -89,6 +92,7 @@ class States:  # pylint: disable=too-few-public-methods
     AQI = 8
     POLLEN = 9
     TRIMET = 10
+    IMAGE = 11
 
 
 class GiveMeASign:  # pylint: disable=too-many-instance-attributes
@@ -108,7 +112,6 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self._setup_buttons()
         self._setup_rtc()
-        self._platform.wifi_connect()
 
         self.data = Data()
         self.logger = Logger.getLogger("default")
@@ -120,6 +123,8 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self._loop_state = States.CLOCK
         self.display_enabled = True
         self._blank_group = None
+        self._next_gc_time = 0
+        self._next_low_memory_log_time = 0
 
     def _ensure_blank_group(self):
         """Lazily build a full-frame black group for display-off mode."""
@@ -183,6 +188,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self.aqi = AQI(self)  # pylint: disable=attribute-defined-outside-init
         self.tones = Tones(self)  # pylint: disable=attribute-defined-outside-init
         self.pollen = Pollen(self)  # pylint: disable=attribute-defined-outside-init
+        self.image = Image(self)  # pylint: disable=attribute-defined-outside-init
         self._next_up(States.CLOCK, 20)
 
     def _setup_buttons(self):
@@ -247,12 +253,18 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         """
         self._platform.loop()
         self.tones.loop()
-        gc.collect()
 
-        if gc.mem_free() < FREE_MEMORY_LIMIT:  # pylint: disable=no-member
-            self.logger.error(
-                f"give_me_a_sign:low memory {gc.mem_free()}"  # pylint: disable=no-member
-            )  # pylint: disable=no-member
+        now = time.monotonic_ns()
+        if now > self._next_gc_time:
+            self._next_gc_time = now + GC_INTERVAL_NS
+            gc.collect()
+
+            if gc.mem_free() < FREE_MEMORY_LIMIT:  # pylint: disable=no-member
+                if now > self._next_low_memory_log_time:
+                    self._next_low_memory_log_time = now + LOW_MEMORY_LOG_INTERVAL_NS
+                    self.logger.error(
+                        f"give_me_a_sign:low memory {gc.mem_free()}"  # pylint: disable=no-member
+                    )
 
         self.button1.update()
         self.button2.update()
@@ -282,7 +294,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
             group = displayio.Group()
             group.append(line)
-            self.display.show(group)
+            self.display.root_group = group
 
             print("HALT")
             while True:
@@ -298,7 +310,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
             group = displayio.Group()
             group.append(line)
-            self.display.show(group)
+            self.display.root_group = group
 
             time.sleep(2)
             microcontroller.reset()
@@ -323,7 +335,14 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self.data.is_updated(Message.KEY):
             if self.message.show():
                 self.message.loop()
-                self._next_up(States.MESSAGE, 15)
+                self._next_up(
+                    States.MESSAGE, self._data_duration(Message.KEY, 15)
+                )
+                return
+
+        if self.data.is_updated(Image.KEY):
+            if self.image.show():
+                self._next_up(States.IMAGE, self._data_duration(Image.KEY, 15))
                 return
 
         if self._loop_state == States.MESSAGE:
@@ -340,6 +359,24 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                 return
 
             self.greeter.loop()
+            return
+
+        if self._loop_state == States.IMAGE:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
+            return
+
+        if self._loop_state == States.IP_ADDRESS:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
+                return
+
+            self.ip_screen.loop()
+            return
+
+        if self._loop_state == States.SPLASH:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
             return
 
         if self._loop_state == States.CLOCK:
@@ -374,13 +411,13 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         if self._loop_state == States.UVI:
             if self.clock.is_sundown:
-                self._next_up(States.CLOCK, 20)
+                self._next_up(States.POLLEN, 10)
             elif (
                 self._is_time_up()
                 or self.data.age(UV.KEY) > 60 * 60
                 or not self.uv_index.show(mini_clock)
             ):
-                self._next_up(States.CLOCK, 20)
+                self._next_up(States.POLLEN, 10)
 
             return
 
@@ -388,14 +425,26 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             if (
                 self._is_time_up()
                 or self.data.age(Pollen.KEY) > 60 * 60
-                or not self.pollen.show(mini_clock)  # pylint: disable=too-many-function-args
+                or not self.pollen.show(mini_clock)
             ):
-                self._next_up(States.CLOCK, 10)
+                self._next_up(States.CLOCK, 20)
 
             return
 
         self.clock.loop()
-        gc.collect()
+
+    def _data_duration(self, key, default) -> int:
+        """
+        Return the optional "duration" field (seconds) from the data stored
+        under key, or default if it's missing or invalid
+        """
+        item = self.data.get_item(key)
+        try:
+            duration = int(item["duration"])
+        except (KeyError, TypeError, ValueError):
+            return default
+
+        return duration if duration > 0 else default
 
     def _set_countdown(self, seconds) -> None:
         """

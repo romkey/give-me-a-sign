@@ -37,7 +37,7 @@ class Platform:
         self._server = None
         self._mqtt = None
         self._socket_pool = None
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
         self._wifi_restored_flag = False
 
@@ -67,10 +67,11 @@ class Platform:
 
         self._refresh_socket_pool_and_ntp()
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
 
     def _try_wifi_reconnect(self) -> None:
-        now = time.monotonic()
+        # monotonic_ns doesn't lose precision over long uptimes like monotonic does
+        now = time.monotonic_ns()
         if now < self._wifi_next_retry_at:
             return
 
@@ -84,13 +85,13 @@ class Platform:
             wifi.radio.connect(ssid, password)
         except ConnectionError as error:
             print("wifi reconnect failed:", error)
-            self._wifi_next_retry_at = now + self._wifi_backoff_s
+            self._wifi_next_retry_at = now + int(self._wifi_backoff_s * 1e9)
             self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
             return
 
         self._refresh_socket_pool_and_ntp()
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_restored_flag = True
         print("WiFi reconnected")
 

@@ -52,7 +52,11 @@ class AQI:
             return False
 
         self._app.data.clear_updated(AQI.KEY)
-        index = int(aqi["aqi"])
+
+        try:
+            index = int(aqi["aqi"])
+        except (KeyError, TypeError, ValueError):
+            return False
 
         line = adafruit_display_text.label.Label(
             terminalio.FONT, color=AQI._aqi_color(index), text="AQI " + str(index)

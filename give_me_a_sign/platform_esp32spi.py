@@ -42,7 +42,7 @@ class Platform:
         self._ntp = None
         self._server = None
         self._mqtt = None
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
         self._wifi_failures = 0
         self._wifi_restored_flag = False
@@ -81,7 +81,9 @@ class Platform:
                         f'\t{access_point["ssid"].decode()}\t\tRSSI: {access_point["rssi"]}'
                     )
                 self._wifi_failures += 1
-                self._wifi_next_retry_at = time.monotonic() + self._wifi_backoff_s
+                self._wifi_next_retry_at = time.monotonic_ns() + int(
+                    self._wifi_backoff_s * 1e9
+                )
                 self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
                 return
 
@@ -95,11 +97,12 @@ class Platform:
 
         self._ntp = AppNTP(self.esp)
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_failures = 0
 
     def _try_wifi_reconnect(self) -> None:
-        now = time.monotonic()
+        # monotonic_ns doesn't lose precision over long uptimes like monotonic does
+        now = time.monotonic_ns()
         if now < self._wifi_next_retry_at:
             return
 
@@ -114,7 +117,7 @@ class Platform:
         except ConnectionError as error:
             print("wifi reconnect failed:", error)
             self._wifi_failures += 1
-            self._wifi_next_retry_at = now + self._wifi_backoff_s
+            self._wifi_next_retry_at = now + int(self._wifi_backoff_s * 1e9)
             self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
             if self._wifi_failures >= WIFI_FAILURES_BEFORE_RESET:
                 print("WiFi: too many failures, resetting MCU")
@@ -124,7 +127,7 @@ class Platform:
 
         self._ntp = AppNTP(self.esp)
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_failures = 0
         self._wifi_restored_flag = True
         print("WiFi reconnected (ESP32SPI)")

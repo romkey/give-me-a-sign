@@ -50,17 +50,19 @@ class Trimet:
         trimet = self._app.data.get_item(Trimet.KEY)
         self._app.data.clear_updated(Trimet.KEY)
 
-        if trimet is None or trimet["index"] == 0:
+        try:
+            index = trimet["index"]
+        except (TypeError, KeyError):
             return False
 
-        try:
-            line = adafruit_display_text.label.Label(
-                terminalio.FONT,
-                color=0x800080,
-                text="UVI " + str(int(trimet["index"] * 10) / 10.0),
-            )
-        except KeyError:
+        if index == 0:
             return False
+
+        line = adafruit_display_text.label.Label(
+            terminalio.FONT,
+            color=0x800080,
+            text="UVI " + str(int(index * 10) / 10.0),
+        )
 
         line.x = 0
         line.y = 12

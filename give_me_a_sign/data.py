@@ -110,12 +110,16 @@ class Data:
 
         gc.collect()
 
-        with open(Data.SAVE_FILE, "w") as file:
-            file.write(json.dumps(self._data))
+        try:
+            with open(Data.SAVE_FILE, "w") as file:
+                file.write(json.dumps(self._data))
+        except OSError:
+            return False
+        finally:
+            gc.collect()
+            # always restore read-only mode, even if the write failed
+            storage.remount("/", True)
 
-        gc.collect()
-
-        storage.remount("/", True)
         return True
 
     def _restore(self) -> bool:

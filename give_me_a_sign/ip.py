@@ -10,14 +10,13 @@ give-me-a-sign/ip - IP address module for LED Matrix display
 """
 
 import terminalio
-from adafruit_display_text.bitmap_label import Label
+from adafruit_display_text.scrolling_label import ScrollingLabel
 
 
 class IP:
     """
-    Queries and displays the sign's IP address.
-
-    Attempts to scroll it if needed but that doesn't seem to work right now.
+    Queries and displays the sign's IP address, scrolling it if it's
+    too wide for the display.
     """
 
     def __init__(self, app):
@@ -31,7 +30,7 @@ class IP:
         """
         Fetch the IP address from the ESP32 and then display it on the screen.
         """
-        self._line = Label(
+        self._line = ScrollingLabel(
             terminalio.FONT,
             color=0x00FF00,
             text=str(self._app.platform.wifi_ip_address),
@@ -51,10 +50,9 @@ class IP:
 
         return True
 
-    def loop(self) -> None:  # pylint: disable=no-self-use
+    def loop(self) -> None:
         """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
+        Advance the scrolling animation; called while the IP screen is shown
         """
-
-        self._line.update()
+        if self._line is not None:
+            self._line.update()
