@@ -12,12 +12,11 @@ give_me_a_sign.sign — application module for LED Matrix display
 
 import sys
 
-# 10.2 adds supervisor.get_setting(), used for typed settings.toml values
-_MIN_CIRCUITPYTHON = (10, 2, 0)
+_MIN_CIRCUITPYTHON = (10, 0, 0)
 
 
 def _require_circuitpython_version():
-    """Fail fast on unsupported CircuitPython (CP 10.2+). Skip on CPython for local tooling."""
+    """Fail fast on unsupported CircuitPython (CP 10+). Skip on CPython for local tooling."""
     if getattr(sys.implementation, "name", "") != "circuitpython":
         return
     ver = sys.implementation.version
@@ -25,8 +24,7 @@ def _require_circuitpython_version():
         vstr = ".".join(str(x) for x in ver)
         raise RuntimeError(
             "Give Me A Sign requires CircuitPython "
-            f"{_MIN_CIRCUITPYTHON[0]}.{_MIN_CIRCUITPYTHON[1]} or later "
-            f"(this build is {vstr})."
+            f"{_MIN_CIRCUITPYTHON[0]}.x or later (this build is {vstr})."
         )
 
 
