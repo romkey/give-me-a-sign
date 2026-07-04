@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 import gc
+import os
 import time
 import traceback
 import board
@@ -25,6 +26,9 @@ built from multiples of the standard 64x32 panel:
     MATRIX_SERPENTINE = true   # alternate panel rows rotated 180 degrees
     MATRIX_BIT_DEPTH = 2       # more depth = more colors, more RAM/CPU
 
+On CircuitPython older than 10.2, settings.toml values must be strings or
+ints, so use MATRIX_SERPENTINE = 1 (or "true") instead of a bare boolean.
+
 The example above drives a 128x64 display made of four 64x32 panels,
 two across and two down. Content is laid out on a 64x32 canvas and
 integer-scaled to fit, so no other configuration is needed.
@@ -37,11 +41,37 @@ supervisor.runtime.autoreload = False
 
 print("hello world")
 
-MATRIX_WIDTH = supervisor.get_setting("MATRIX_WIDTH", 64)
-MATRIX_PANEL_HEIGHT = supervisor.get_setting("MATRIX_PANEL_HEIGHT", 32)
-MATRIX_TILE = supervisor.get_setting("MATRIX_TILE", 1)
-MATRIX_SERPENTINE = supervisor.get_setting("MATRIX_SERPENTINE", True)
-MATRIX_BIT_DEPTH = supervisor.get_setting("MATRIX_BIT_DEPTH", 2)
+
+def _get_setting(key, default):
+    """
+    Read a typed value from settings.toml.
+
+    Uses supervisor.get_setting() where available (CircuitPython 10.2+),
+    otherwise falls back to os.getenv() and coerces the value to the type
+    of the default.
+    """
+    getter = getattr(supervisor, "get_setting", None)
+    if getter is not None:
+        return getter(key, default)
+
+    value = os.getenv(key)
+    if value is None:
+        return default
+    if isinstance(default, bool):
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(default, int):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return value
+
+
+MATRIX_WIDTH = _get_setting("MATRIX_WIDTH", 64)
+MATRIX_PANEL_HEIGHT = _get_setting("MATRIX_PANEL_HEIGHT", 32)
+MATRIX_TILE = _get_setting("MATRIX_TILE", 1)
+MATRIX_SERPENTINE = _get_setting("MATRIX_SERPENTINE", True)
+MATRIX_BIT_DEPTH = _get_setting("MATRIX_BIT_DEPTH", 2)
 
 if MATRIX_WIDTH % 64 != 0 or MATRIX_WIDTH < 64:
     raise ValueError("MATRIX_WIDTH must be a positive multiple of 64")
