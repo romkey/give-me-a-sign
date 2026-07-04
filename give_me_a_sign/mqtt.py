@@ -36,6 +36,31 @@ MQTT_RETRY_MAX_S = 120
 MQTT_FAILURES_BEFORE_RESET = 20
 
 
+def _get_setting(key, default):
+    """
+    Read a typed value from settings.toml.
+
+    Uses supervisor.get_setting() where available (CircuitPython 10.2+),
+    otherwise falls back to os.getenv() and coerces the value to the type
+    of the default.
+    """
+    getter = getattr(supervisor, "get_setting", None)
+    if getter is not None:
+        return getter(key, default)
+
+    value = os.getenv(key)
+    if value is None:
+        return default
+    if isinstance(default, bool):
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(default, int):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return value
+
+
 class SignMQTT:  # pylint: disable=too-many-instance-attributes
     """
     SignMQTT subscribes to an MQTT broker in order to receive data on various topics
@@ -92,8 +117,8 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
 
             self._mqtt = MQTT.MQTT(
                 broker=os.getenv("MQTT_BROKER"),
-                port=supervisor.get_setting("MQTT_PORT", 1883),
-                is_ssl=supervisor.get_setting("MQTT_SSL", False),
+                port=_get_setting("MQTT_PORT", 1883),
+                is_ssl=_get_setting("MQTT_SSL", False),
                 client_id=os.getenv("MQTT_CLIENTID"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
@@ -105,8 +130,8 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             # timeout, so don't make it too small.
             self._mqtt = MQTT.MQTT(
                 broker=os.getenv("MQTT_BROKER"),
-                port=supervisor.get_setting("MQTT_PORT", 1883),
-                is_ssl=supervisor.get_setting("MQTT_SSL", False),
+                port=_get_setting("MQTT_PORT", 1883),
+                is_ssl=_get_setting("MQTT_SSL", False),
                 client_id=os.getenv("MQTT_CLIENTID"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
