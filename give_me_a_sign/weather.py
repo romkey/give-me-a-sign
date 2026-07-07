@@ -204,7 +204,9 @@ class Weather:
         """
         weather = self._app.data.get_item("weather")
         forecast = self._app.data.get_item("forecast")
-        if not isinstance(weather, dict) or not isinstance(weather.get("current"), dict):
+        if not isinstance(weather, dict) or not isinstance(
+            weather.get("current"), dict
+        ):
             return False
 
         current = weather["current"]
