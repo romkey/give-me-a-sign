@@ -22,4 +22,4 @@ jobs:
       - name: Run CircuitPython build checks
         uses: ./.github/actions/circuitpython-build
         with:
-          python-version: "3.11"
+          python-version: "3.12"
