@@ -22,21 +22,23 @@ class HomeAssistant:
     Publishes messages to MQTT that inform Home Assistant of functionality in GiveMeASign
     """
 
-    def __init__(self, mac_address, mqtt_client):
+    def __init__(self, mac_address, mqtt_client, base_topic):
         """Initialize Home Assistant MQTT autodiscovery manager
 
         Args:
             mac_address (str): Device MAC address (e.g., "34:85:18:b1:ef:28")
             mqtt_client: MQTT client object with publish() method
+            base_topic (str): the sign's MQTT topic base, shared with SignMQTT
+                so that command/state topics match its subscriptions
         """
         self._name = "GiveMeASign - " + os.getenv("SIGN_NAME", mac_address)
         self._mac_address = mac_address
         self._mqtt_client = mqtt_client
         mac_clean = mac_address.replace(":", "_")
         self._device_id = f"givemeasign_{mac_clean}"
-        self._base_topic = f"givemeasign/sign/{mac_clean}"
+        self._base_topic = base_topic
         self._availability_topic = f"{self._base_topic}/available"
-        self._last_advertisement_time = 0
+        self._last_advertisement_time = None  # None -> publish immediately
         self._advertisement_interval = 3600  # 1 hour in seconds
 
     def set_mqtt_client(self, mqtt_client):
@@ -257,7 +259,14 @@ class HomeAssistant:
             }
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
-            autodiscovery_messages.append({"topic": topic_notify, "payload": payload})
+
+            # unique_id must be unique across the whole MQTT integration, so the
+            # notify entity can't share the text entity's id
+            notify_payload = dict(payload)
+            notify_payload["unique_id"] = f"{self._device_id}_{text_key}_notify"
+            autodiscovery_messages.append(
+                {"topic": topic_notify, "payload": notify_payload}
+            )
 
         for button_key, button_config in buttons.items():
             topic = f"homeassistant/button/{self._device_id}/{button_key}/config"
@@ -323,20 +332,16 @@ class HomeAssistant:
 
     def loop(self):
         """Main loop - call this regularly from your main program loop"""
-        current_time = time.time()
+        # monotonic clock: time.time() jumps when NTP corrects the RTC, which
+        # could delay or spam the hourly advertisements
+        current_time = time.monotonic_ns() // 1_000_000_000
 
         # Check if it's time to publish advertisements (once per hour)
-        if current_time - self._last_advertisement_time >= self._advertisement_interval:
+        if (
+            self._last_advertisement_time is None
+            or current_time - self._last_advertisement_time
+            >= self._advertisement_interval
+        ):
             self.publish_advertisements()
             self.publish_online_status()
             self._last_advertisement_time = current_time
-
-    def setup_mqtt_will(self):
-        """Configure MQTT Last Will and Testament for offline detection
-        Call this before connecting to MQTT broker"""
-        return {
-            "topic": self._availability_topic,
-            "payload": "offline",
-            "retain": True,
-            "qos": 1,
-        }

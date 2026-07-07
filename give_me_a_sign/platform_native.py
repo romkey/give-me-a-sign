@@ -21,6 +21,9 @@ from .mqtt import SignMQTT
 
 WIFI_RETRY_MIN_S = 5
 WIFI_RETRY_MAX_S = 90
+# bound each connect attempt so a missing AP can't stall the loop for long
+WIFI_CONNECT_TIMEOUT_S = 10
+SERVER_RETRY_INTERVAL_NS = 10 * 1_000_000_000
 
 
 class Platform:
@@ -35,15 +38,19 @@ class Platform:
         self._app = app
         self._ntp = None
         self._server = None
+        self._server_wanted = False
+        self._server_next_retry_at = 0
         self._mqtt = None
         self._socket_pool = None
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
         self._wifi_restored_flag = False
 
     def _refresh_socket_pool_and_ntp(self):
         self._socket_pool = socketpool.SocketPool(wifi.radio)
-        self._ntp = adafruit_ntp.NTP(self._socket_pool, tz_offset=0)
+        # short socket timeout: a failed sync stalls the display loop for
+        # its duration (default would be 10 seconds)
+        self._ntp = adafruit_ntp.NTP(self._socket_pool, tz_offset=0, socket_timeout=5)
 
     def wifi_connect(self) -> None:
         """
@@ -59,18 +66,22 @@ class Platform:
                 print("wifi_ssid or wifi_password not set in secrets.toml")
                 return
 
+            # Catch broadly: if any connect error escaped, the caller's loop
+            # would retry with no backoff and the blocking connect calls
+            # would effectively freeze the display.
             try:
-                wifi.radio.connect(ssid, password)
-            except ConnectionError:
-                print("wifi failure")
+                wifi.radio.connect(ssid, password, timeout=WIFI_CONNECT_TIMEOUT_S)
+            except (OSError, RuntimeError) as error:
+                print("wifi failure:", error)
                 return
 
         self._refresh_socket_pool_and_ntp()
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
 
     def _try_wifi_reconnect(self) -> None:
-        now = time.monotonic()
+        # monotonic_ns doesn't lose precision over long uptimes like monotonic does
+        now = time.monotonic_ns()
         if now < self._wifi_next_retry_at:
             return
 
@@ -81,16 +92,18 @@ class Platform:
 
         print("WiFi reconnect attempt")
         try:
-            wifi.radio.connect(ssid, password)
-        except ConnectionError as error:
+            wifi.radio.connect(ssid, password, timeout=WIFI_CONNECT_TIMEOUT_S)
+        except (OSError, RuntimeError) as error:
             print("wifi reconnect failed:", error)
-            self._wifi_next_retry_at = now + self._wifi_backoff_s
+            self._wifi_next_retry_at = now + int(self._wifi_backoff_s * 1e9)
             self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
             return
 
         self._refresh_socket_pool_and_ntp()
+        # the old server's sockets died with the connection; loop() rebuilds it
+        self._drop_server()
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
-        self._wifi_next_retry_at = 0.0
+        self._wifi_next_retry_at = 0
         self._wifi_restored_flag = True
         print("WiFi reconnected")
 
@@ -163,21 +176,52 @@ class Platform:
         """
         Get the current time in UTC from NTP
         """
-        try:
-            if self._ntp is not None:
-                return self._ntp.datetime
-        except (OSError, ArithmeticError):
+        if self._ntp is None or not self.wifi_is_connected:
             return None
 
-        return None
+        try:
+            return self._ntp.datetime
+        except (OSError, RuntimeError, ArithmeticError):
+            return None
 
     def start_servers(self) -> None:
         """
-        Start the web application server
+        Start MQTT and the web application server. If WiFi isn't up yet
+        the HTTP server start is deferred to loop() rather than letting a
+        failure here kill the whole app at boot.
         """
         self._mqtt = SignMQTT(self._app, self)
-        self._server = AppServer(self._app)
-        self._server.start()
+        self._server_wanted = True
+        self._ensure_server()
+
+    def _drop_server(self) -> None:
+        """Close the HTTP server's listening socket so a rebuild can rebind."""
+        if self._server is None:
+            return
+        try:
+            self._server.stop()
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        self._server = None
+
+    def _ensure_server(self) -> None:
+        """Start (or restart) the HTTP server once WiFi is available."""
+        if not self._server_wanted or self._server is not None:
+            return
+        if not self.wifi_is_connected:
+            return
+        if time.monotonic_ns() < self._server_next_retry_at:
+            return
+
+        try:
+            server = AppServer(self._app)
+            server.start()
+        except (OSError, RuntimeError) as error:
+            print("HTTP server start failed, will retry:", error)
+            self._server_next_retry_at = time.monotonic_ns() + SERVER_RETRY_INTERVAL_NS
+            return
+
+        self._server = server
 
     @property
     def server(self):
@@ -196,12 +240,22 @@ class Platform:
     def loop(self) -> None:
         """
         Perform any repetitive tasks necessary
+
+        Each subsystem is isolated so one failure can't starve the display
+        state machine (an exception escaping here aborts the whole app loop
+        iteration, every iteration, freezing the sign).
         """
         if not self.wifi_is_connected:
             self._try_wifi_reconnect()
 
+        self._ensure_server()
+
         if self._server:
-            self._server.loop()
+            try:
+                self._server.loop()
+            except (OSError, RuntimeError) as error:
+                print("HTTP server poll failed, restarting server:", error)
+                self._drop_server()
 
         if self._mqtt:
             self._mqtt.loop()

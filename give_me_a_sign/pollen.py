@@ -33,18 +33,17 @@ class Pollen:
 
         self._app = app
 
-    def show(self) -> bool:
+    def show(self, mini_clock) -> bool:
         """
         Display the Pollen Count on the screen
 
-        The server receives count and stashes it in the Data store under the key "count".
+        The server receives count and stashes it in the Data store under the key "pollen".
         This class retrieves count and displays it.
 
         Data structure should look like:
 
         .. code-block:: python
-           { "count": integer }
-           { "tree": integer, "grass": integer }
+           { "pollen": integer }
         """
 
         pollen = self._app.data.get_item(Pollen.KEY)
@@ -53,15 +52,26 @@ class Pollen:
 
         self._app.data.clear_updated(Pollen.KEY)
 
+        try:
+            count = int(pollen["pollen"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
         line = adafruit_display_text.label.Label(
-            terminalio.FONT, color=0x800080, text="Pollen " + str(int(pollen["pollen"]))
+            terminalio.FONT, color=0x800080, text="Pollen " + str(count)
         )
         line.x = 0
         line.y = 12
 
-        g = displayio.Group()
-        g.append(line)
-        self._app.display.root_group = g
+        group = displayio.Group()
+        group.append(line)
+
+        mini_clock_width = mini_clock.bounding_box[2]
+        mini_clock.x = self._app.canvas_width - mini_clock_width
+        mini_clock.y = 2
+        group.append(mini_clock)
+
+        self._app.show_group(group)
 
         return True
 

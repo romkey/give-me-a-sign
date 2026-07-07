@@ -43,11 +43,14 @@ class Message:
         Data structure should look like:
 
         .. code-block:: python
-           { "message": text,
+           { "text": string,
              "color": 0x000000,
-             "duration": seconds,
-             "scroll": true/false
+             "duration": seconds
             }
+
+        "duration" is optional (how long the sign shows the message;
+        the state machine defaults to 15 seconds). Scrolling is not
+        implemented.
         """
 
         self._app.data.clear_updated(Message.KEY)
@@ -64,16 +67,16 @@ class Message:
 
         box = line.bounding_box
         width = box[2]
-        if width > self._app.display.width:
+        if width > self._app.canvas_width:
             line.x = 0
         else:
-            line.x = round((self._app.display.width - width) / 2)
+            line.x = round((self._app.canvas_width - width) / 2)
 
-        line.y = self._app.display.height // 2
+        line.y = self._app.canvas_height // 2
 
         group = displayio.Group()
         group.append(line)
-        self._app.display.root_group = group
+        self._app.show_group(group)
         return True
 
     def loop(self) -> None:  # pylint: disable=no-self-use

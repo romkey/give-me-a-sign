@@ -48,7 +48,21 @@ class Image:
         tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)
         group = displayio.Group()
         group.append(tile_grid)
-        self._app.display.root_group = group
+
+        if (
+            bitmap.width <= self._app.canvas_width
+            and bitmap.height <= self._app.canvas_height
+        ):
+            # canvas-sized image: center it and let the canvas scale it up
+            tile_grid.x = (self._app.canvas_width - bitmap.width) // 2
+            tile_grid.y = (self._app.canvas_height - bitmap.height) // 2
+            self._app.show_group(group)
+        else:
+            # larger than the canvas: assume it targets the physical display
+            # and show it unscaled, centered
+            tile_grid.x = max(0, (self._app.display.width - bitmap.width) // 2)
+            tile_grid.y = max(0, (self._app.display.height - bitmap.height) // 2)
+            self._app.display.root_group = group
 
         return True
 

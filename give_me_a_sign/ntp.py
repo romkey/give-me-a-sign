@@ -65,12 +65,10 @@ class AppNTP:
                 print("NTP fail ", len(packet))
                 return None
 
-        except BrokenPipeError as reason:
-            print("NTP broken pipe", reason)
-            return None
-
-        except ConnectionError as reason:
-            print("NTP connection", reason)
+        # OSError covers BrokenPipeError/ConnectionError/timeouts;
+        # RuntimeError covers the ESP32SPI layer wedging
+        except (OSError, RuntimeError) as reason:
+            print("NTP failed", reason)
             return None
 
         seconds = struct.unpack_from("!I", packet, offset=len(packet) - 8)[0]

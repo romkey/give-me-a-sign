@@ -15,6 +15,7 @@ import gc
 import sys
 import board
 import microcontroller
+import supervisor
 
 import adafruit_minimqtt.adafruit_minimqtt as MQTT
 
@@ -33,6 +34,31 @@ from .home_assistant import HomeAssistant
 MQTT_RETRY_MIN_S = 5
 MQTT_RETRY_MAX_S = 120
 MQTT_FAILURES_BEFORE_RESET = 20
+
+
+def _get_setting(key, default):
+    """
+    Read a typed value from settings.toml.
+
+    Uses supervisor.get_setting() where available (CircuitPython 10.2+),
+    otherwise falls back to os.getenv() and coerces the value to the type
+    of the default.
+    """
+    getter = getattr(supervisor, "get_setting", None)
+    if getter is not None:
+        return getter(key, default)
+
+    value = os.getenv(key)
+    if value is None:
+        return default
+    if isinstance(default, bool):
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(default, int):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return value
 
 
 class SignMQTT:  # pylint: disable=too-many-instance-attributes
@@ -64,14 +90,15 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         self._id = self._platform.wifi_mac_address.replace(":", "_")
         self._next_diagnostic_time = 0
         self._topic_prefix = os.getenv("MQTT_TOPIC_PREFIX") or "givemeasign"
-        self._ha_sign_base = f"givemeasign/sign/{self._id}"
+        self._ha_sign_base = f"{self._topic_prefix}/sign/{self._id}"
         self._display_state_topic = f"{self._ha_sign_base}/display/state"
         self._display_command_topic = f"{self._ha_sign_base}/display/set"
 
         self._mqtt = None
+        self._mqtt_loop_timeout = 1
         self._home_assistant = None
         self._mqtt_failures = 0
-        self._mqtt_next_retry_at = 0.0
+        self._mqtt_next_retry_at = 0
         self._mqtt_backoff_s = MQTT_RETRY_MIN_S
 
         if self._platform.wifi_is_connected:
@@ -79,12 +106,8 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         else:
             print("WiFi NOT connected!")
 
-        self._build_mqtt_client()
-        try:
-            self._mqtt_connect_and_subscribe()
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT initial connect failed:", error)
-            self._on_mqtt_failure()
+        # one connect path for initial connect, retries and rebuilds
+        self._maybe_retry_mqtt()
 
     def _build_mqtt_client(self):
         socket = self._platform.get_socket()
@@ -94,39 +117,56 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
 
             self._mqtt = MQTT.MQTT(
                 broker=os.getenv("MQTT_BROKER"),
-                port=os.getenv("MQTT_PORT") or 1888,
-                is_ssl=os.getenv("MQTT_SSL") or False,
+                port=_get_setting("MQTT_PORT", 1883),
+                is_ssl=_get_setting("MQTT_SSL", False),
                 client_id=os.getenv("MQTT_CLIENTID"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
             )
+            self._mqtt_loop_timeout = 1
         else:
+            # A small socket timeout keeps loop() from stalling the display
+            # loop for seconds at a time. It's also used as the TCP connect
+            # timeout, so don't make it too small.
             self._mqtt = MQTT.MQTT(
                 broker=os.getenv("MQTT_BROKER"),
-                port=os.getenv("MQTT_PORT") or 1888,
-                is_ssl=os.getenv("MQTT_SSL") or False,
+                port=_get_setting("MQTT_PORT", 1883),
+                is_ssl=_get_setting("MQTT_SSL", False),
                 client_id=os.getenv("MQTT_CLIENTID"),
                 username=os.getenv("MQTT_USERNAME"),
                 password=os.getenv("MQTT_PASSWORD"),
                 socket_pool=socket,
+                socket_timeout=0.25,
+                # a single bounded attempt per connect() call; otherwise
+                # MiniMQTT retries internally with sleeps of up to ~30s each,
+                # freezing the display. SignMQTT owns the retry/backoff policy.
+                connect_retries=1,
             )
+            self._mqtt_loop_timeout = 0.25
 
         print("MQTT Connect")
-        self._mqtt.onconnect = lambda: print("onconnect")
-        self._mqtt.will_set(f"givemeasign/sign/{self._id}/available", "offline", True)
+        self._mqtt.will_set(
+            f"{self._ha_sign_base}/available", "offline", retain=True, qos=1
+        )
 
     def _subscribe_all_topics(self):
         for endpoint in self.STORE_ENDPOINTS:
-            topic = f"{self._topic_prefix}/all/module/{endpoint}"
-            self._mqtt.subscribe(topic)
-            self._mqtt.add_topic_callback(
-                topic,
-                lambda client, topic, message, key=endpoint: self.store_data(
-                    key, message
-                ),
-            )
+            # broadcast topic (all signs) and per-device topic (used by the
+            # Home Assistant text entities)
+            for topic in (
+                f"{self._topic_prefix}/all/module/{endpoint}",
+                f"{self._ha_sign_base}/module/{endpoint}",
+            ):
+                self._mqtt.subscribe(topic)
+                self._mqtt.add_topic_callback(
+                    topic,
+                    lambda client, topic, message, key=endpoint: self.store_data(
+                        key, message
+                    ),
+                )
 
-        topic = f"{self._topic_prefix}/{self._id}/reboot"
+        # matches the Home Assistant reboot button's command_topic
+        topic = f"{self._ha_sign_base}/reboot"
         self._mqtt.subscribe(topic)
         self._mqtt.add_topic_callback(
             topic,
@@ -144,48 +184,60 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         print("MQTT Connected")
         if self._home_assistant is None:
             self._home_assistant = HomeAssistant(
-                self._app.platform.wifi_mac_address, self._mqtt
+                self._app.platform.wifi_mac_address, self._mqtt, self._ha_sign_base
             )
         else:
             self._home_assistant.set_mqtt_client(self._mqtt)
+        # the LWT may have retained "offline"; clear it right away rather than
+        # waiting for the hourly advertisement cycle
+        self._home_assistant.publish_online_status()
         self.publish_display_state()
         self._mqtt_failures = 0
         self._mqtt_backoff_s = MQTT_RETRY_MIN_S
-        self._mqtt_next_retry_at = 0.0
+        self._mqtt_next_retry_at = 0
 
     def _on_mqtt_failure(self):
-        now = time.monotonic()
-        self._mqtt_next_retry_at = now + self._mqtt_backoff_s
+        # monotonic_ns doesn't lose precision over long uptimes like monotonic does
+        self._mqtt_next_retry_at = time.monotonic_ns() + int(self._mqtt_backoff_s * 1e9)
         self._mqtt_backoff_s = min(self._mqtt_backoff_s * 2, MQTT_RETRY_MAX_S)
         self._mqtt_failures += 1
         if self._mqtt_failures >= MQTT_FAILURES_BEFORE_RESET:
             print("MQTT: too many consecutive failures, resetting MCU")
             microcontroller.reset()
 
-    def _maybe_retry_mqtt(self):
-        if time.monotonic() < self._mqtt_next_retry_at:
-            return
-        try:
-            if self._mqtt is None:
-                self._build_mqtt_client()
-            self._mqtt_connect_and_subscribe()
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT reconnect failed:", error)
-            self._on_mqtt_failure()
-
-    def _rebuild_mqtt_after_wifi(self):
+    def _teardown_client(self):
+        """Discard the MQTT client; _maybe_retry_mqtt() will build a fresh one."""
         try:
             if self._mqtt is not None:
                 self._mqtt.disconnect()
         except Exception:  # pylint: disable=broad-exception-caught
             pass
         self._mqtt = None
-        self._build_mqtt_client()
+
+    def _maybe_retry_mqtt(self):
+        """
+        (Re)connect if the backoff timer allows it. This is the only path
+        that connects, so a failure can never wedge the caller: it just
+        schedules the next attempt.
+        """
+        if time.monotonic_ns() < self._mqtt_next_retry_at:
+            return
         try:
+            if self._mqtt is None:
+                self._build_mqtt_client()
             self._mqtt_connect_and_subscribe()
         except Exception as error:  # pylint: disable=broad-exception-caught
-            print("MQTT rebuild after WiFi failed:", error)
+            print("MQTT connect failed:", error)
+            # a half-connected client can't be trusted; rebuild next attempt
+            self._teardown_client()
             self._on_mqtt_failure()
+
+    def _rebuild_mqtt_after_wifi(self):
+        """WiFi came back: the old sockets are dead, so start over immediately."""
+        self._teardown_client()
+        self._mqtt_backoff_s = MQTT_RETRY_MIN_S
+        self._mqtt_next_retry_at = 0
+        self._maybe_retry_mqtt()
 
     def is_connected_to_broker(self) -> bool:
         """Return whether the MQTT client is currently connected."""
@@ -276,7 +328,7 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             "display_width": self._app.display.width,
         }
 
-        self._mqtt.publish(f"givemeasign/sign/{self._id}/diagnostics", json.dumps(info))
+        self._mqtt.publish(f"{self._ha_sign_base}/diagnostics", json.dumps(info))
 
     def loop(self):
         """
@@ -300,7 +352,7 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
 
         if self._home_assistant is None:
             self._home_assistant = HomeAssistant(
-                self._app.platform.wifi_mac_address, self._mqtt
+                self._app.platform.wifi_mac_address, self._mqtt, self._ha_sign_base
             )
 
         try:
@@ -309,18 +361,13 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             if time.monotonic_ns() > self._next_diagnostic_time:
                 print("MQTT publishing diagnostics")
                 self._publish_diagnostics()
-                self._next_diagnostic_time = time.monotonic_ns() + 60e9
+                self._next_diagnostic_time = time.monotonic_ns() + int(60e9)
 
-            self._mqtt.loop(1)
-        except BrokenPipeError as error:
-            print("MQTT BrokenPipeError", error)
-            try:
-                if self._mqtt is not None:
-                    self._mqtt.disconnect()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
-            self._mqtt = None
-            self._on_mqtt_failure()
-        except (OSError, RuntimeError) as error:
+            self._mqtt.loop(self._mqtt_loop_timeout)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            # Any failure here (dead socket, wedged client, bad ap_info race)
+            # gets the same treatment: drop the client and reconnect with
+            # backoff. Never let it escape and starve the display loop.
             print("MQTT loop error:", error)
+            self._teardown_client()
             self._on_mqtt_failure()

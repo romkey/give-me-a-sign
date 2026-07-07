@@ -52,12 +52,23 @@ class Tones:
                  ]
         }
         """
-        self._tones = self._app.data.get_item(Tones.KEY)
-        if self._tones is None:
-            return False
-
+        data = self._app.data.get_item(Tones.KEY)
         self._app.data.clear_updated(Tones.KEY)
 
+        # validate now: loop() runs on every app loop pass, so a malformed
+        # payload crashing there would freeze the whole sign (with the
+        # buzzer possibly stuck on)
+        try:
+            tones = data["tones"]
+            for tone in tones:
+                int(tone["frequency"])
+                float(tone["duration"])
+                float(tone["volume"])
+        except (KeyError, TypeError, ValueError):
+            print("tones: bad data", data)
+            return False
+
+        self._tones = data
         self._current_index = -1
         self._play_until = time.monotonic()
 

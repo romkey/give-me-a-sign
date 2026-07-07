@@ -14,7 +14,6 @@ import gc
 import sys
 import time
 import json
-import storage
 import microcontroller
 import board
 
@@ -22,7 +21,6 @@ import board
 # import socketpool
 from adafruit_httpserver import Server, Route, Response, JSONResponse, Status
 
-from ._paths import ASSETS_DIR
 from .aqi import AQI
 from .clock import Clock
 from .greet import Greet
@@ -96,7 +94,6 @@ class AppServer:
                 Route("/info", "GET", lambda request: self.info(request)),
                 Route("/data", "GET", lambda request: self.data(request)),
                 Route("/set-time", "POST", lambda request: self.set_time(request)),
-                Route("/image", "POST", lambda request: self.image(request)),
             ]
         )
         #        self._http_server.start(str(wifi.radio.ipv4_address))
@@ -107,6 +104,12 @@ class AppServer:
         Let the underlying HTTP server run
         """
         self._http_server.poll()
+
+    def stop(self) -> None:
+        """
+        Stop the server and close its listening socket so it can be rebuilt
+        """
+        self._http_server.stop()
 
     def store_data(self, request, key) -> list:
         """
@@ -123,7 +126,7 @@ class AppServer:
                 f"server:store_data({key}) store_data failed: {body}"
             )
 
-            return ("400 Invalid JSON", [], [])
+            return Response(request, status=Status(400, "Invalid JSON"))
 
         self._app.data.set_item(key, msg)
 
@@ -159,61 +162,6 @@ class AppServer:
         self._app.logger.info(f'server:set_time({msg["time"]})')
         return Response(request, status=Status(200, "OK"))
 
-    # /image?duration=seconds&animate=true/false
-    # body is file
-    def image(self, environ) -> list:
-        """
-        Handler for uploading an image file
-
-        Work in progress
-
-        The file should be the body of the POST. CGI parameters
-        - animate=bool - whether or not to aniamte the image
-        - interval=integer - interval between frames in ms
-        - x=integer - X origin of image
-        - y=integer - Y origin of image
-        - duration=integer - seconds image should be displayed for
-        """
-        print("image!")
-        print(environ)
-
-        if not "CONTENT_TYPE" in environ:
-            print("No content-type")
-            return ("400 Missing Content-Type", [], [])
-
-        content_type = environ["CONTENT_TYPE"]
-        words = content_type.split("/")
-        if not words[1] in ["bmp", "gif", "png"]:
-            print("bad content-type")
-            return ("400 Invalid image type, accept only bmp, gif and png", [], [])
-
-        suffix = words[1]
-        params = environ["QUERY_STRING"].split("&")
-
-        print("about to save image")
-
-        storage.remount("/", False)
-        filename = ASSETS_DIR + "/uploaded_image." + suffix
-        with open(filename, "w") as file:
-            file.write(environ["wsgi.input"].getvalue())
-
-        print("saved!")
-
-        storage.remount("/", True)
-
-        self._app.data.set_item(
-            "image",
-            {
-                "file": filename,
-                "animate": params["animate"],
-                "interval": params["interval"],
-                "duration": params["duration"],
-                "x": params["x"],
-                "y": params["y"],
-            },
-        )
-        return ("200 OK", [], [])
-
     def info(self, request) -> list:  # pylint: disable=unused-argument
         """
         Return information about the sign including version numbers, current status,
@@ -236,8 +184,8 @@ class AppServer:
                 "ssid": self._app.platform.wifi_ssid,
                 "bssid": self._app.platform.wifi_bssid,
                 "rssi": self._app.platform.wifi_rssi,
-                "mac": self._app.platform.mac_address,
-                "ip": self._app.platform.ip_address,
+                "mac": self._app.platform.wifi_mac_address,
+                "ip": str(self._app.platform.wifi_ip_address),
             },
             "platform": {
                 "python_version": sys.version,

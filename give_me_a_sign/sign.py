@@ -60,6 +60,7 @@ from .clock import Clock
 from .greet import Greet
 from .splash import Splash
 from .weather import Weather
+from .image import Image
 from .ip import IP
 from .tones import Tones
 from .message import Message
@@ -67,10 +68,16 @@ from .uv import UV
 from .aqi import AQI
 from .pollen import Pollen
 
-HTTP_SERVER_SOCKET_NUMBER = 0
-NTP_SOCKET_NUMBER = 1
 FREE_MEMORY_LIMIT = 10000
+GC_INTERVAL_NS = 5 * 1_000_000_000
+LOW_MEMORY_LOG_INTERVAL_NS = 30 * 1_000_000_000
 DEBUG = False
+
+# All modules lay out their content on a virtual 64x32 canvas (one standard
+# panel). On larger displays - chained/tiled multiples of 64x32 - the canvas
+# is integer-scaled and centered, so everything renders correctly at any size.
+CANVAS_WIDTH = 64
+CANVAS_HEIGHT = 32
 
 
 class States:  # pylint: disable=too-few-public-methods
@@ -89,6 +96,7 @@ class States:  # pylint: disable=too-few-public-methods
     AQI = 8
     POLLEN = 9
     TRIMET = 10
+    IMAGE = 11
 
 
 class GiveMeASign:  # pylint: disable=too-many-instance-attributes
@@ -106,9 +114,18 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self.display = display
         self.display.root_group = None
 
+        # integer scale factor from the 64x32 virtual canvas to the physical
+        # display, and offsets to center it (non-proportional sizes like
+        # 128x32 scale by the common factor and letterbox the rest)
+        self._canvas_scale = max(
+            1, min(display.width // CANVAS_WIDTH, display.height // CANVAS_HEIGHT)
+        )
+        self._canvas_x = (display.width - CANVAS_WIDTH * self._canvas_scale) // 2
+        self._canvas_y = (display.height - CANVAS_HEIGHT * self._canvas_scale) // 2
+        self._canvas_container = None
+
         self._setup_buttons()
         self._setup_rtc()
-        self._platform.wifi_connect()
 
         self.data = Data()
         self.logger = Logger.getLogger("default")
@@ -120,6 +137,45 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self._loop_state = States.CLOCK
         self.display_enabled = True
         self._blank_group = None
+        self._next_gc_time = 0
+        self._next_low_memory_log_time = 0
+
+    @property
+    def canvas_width(self) -> int:
+        """Width of the virtual canvas that modules lay their content out on"""
+        return CANVAS_WIDTH
+
+    @property
+    def canvas_height(self) -> int:
+        """Height of the virtual canvas that modules lay their content out on"""
+        return CANVAS_HEIGHT
+
+    def show_group(self, group) -> None:
+        """
+        Show a group laid out in virtual canvas (64x32) coordinates,
+        scaled and centered to fit the physical display.
+
+        Modules should use this instead of setting display.root_group
+        directly so they work on any display size.
+        """
+        if self._canvas_scale == 1 and self._canvas_x == 0 and self._canvas_y == 0:
+            self.display.root_group = group
+            return
+
+        if self._canvas_container is None:
+            self._canvas_container = displayio.Group(
+                scale=self._canvas_scale, x=self._canvas_x, y=self._canvas_y
+            )
+
+        container = self._canvas_container
+        # re-showing the group that's already on screen (e.g. the clock's
+        # persistent group) must not re-append it
+        if not (len(container) == 1 and container[0] is group):
+            while len(container) > 0:
+                container.pop()
+            container.append(group)
+
+        self.display.root_group = container
 
     def _ensure_blank_group(self):
         """Lazily build a full-frame black group for display-off mode."""
@@ -183,6 +239,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self.aqi = AQI(self)  # pylint: disable=attribute-defined-outside-init
         self.tones = Tones(self)  # pylint: disable=attribute-defined-outside-init
         self.pollen = Pollen(self)  # pylint: disable=attribute-defined-outside-init
+        self.image = Image(self)  # pylint: disable=attribute-defined-outside-init
         self._next_up(States.CLOCK, 20)
 
     def _setup_buttons(self):
@@ -247,12 +304,18 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         """
         self._platform.loop()
         self.tones.loop()
-        gc.collect()
 
-        if gc.mem_free() < FREE_MEMORY_LIMIT:  # pylint: disable=no-member
-            self.logger.error(
-                f"give_me_a_sign:low memory {gc.mem_free()}"  # pylint: disable=no-member
-            )  # pylint: disable=no-member
+        now = time.monotonic_ns()
+        if now > self._next_gc_time:
+            self._next_gc_time = now + GC_INTERVAL_NS
+            gc.collect()
+
+            if gc.mem_free() < FREE_MEMORY_LIMIT:  # pylint: disable=no-member
+                if now > self._next_low_memory_log_time:
+                    self._next_low_memory_log_time = now + LOW_MEMORY_LOG_INTERVAL_NS
+                    self.logger.error(
+                        f"give_me_a_sign:low memory {gc.mem_free()}"  # pylint: disable=no-member
+                    )
 
         self.button1.update()
         self.button2.update()
@@ -278,11 +341,11 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             line = adafruit_display_text.label.Label(
                 terminalio.FONT, color=0xFF0000, text=msg
                 )
-            line.y = self.display.height // 2
+            line.y = self.canvas_height // 2
 
             group = displayio.Group()
             group.append(line)
-            self.display.show(group)
+            self.show_group(group)
 
             print("HALT")
             while True:
@@ -294,11 +357,11 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             line = adafruit_display_text.label.Label(
                 terminalio.FONT, color=0xFF0000, text=msg
                 )
-            line.y = self.display.height // 2
+            line.y = self.canvas_height // 2
 
             group = displayio.Group()
             group.append(line)
-            self.display.show(group)
+            self.show_group(group)
 
             time.sleep(2)
             microcontroller.reset()
@@ -323,7 +386,14 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         if self.data.is_updated(Message.KEY):
             if self.message.show():
                 self.message.loop()
-                self._next_up(States.MESSAGE, 15)
+                self._next_up(
+                    States.MESSAGE, self._data_duration(Message.KEY, 15)
+                )
+                return
+
+        if self.data.is_updated(Image.KEY):
+            if self.image.show():
+                self._next_up(States.IMAGE, self._data_duration(Image.KEY, 15))
                 return
 
         if self._loop_state == States.MESSAGE:
@@ -340,6 +410,24 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                 return
 
             self.greeter.loop()
+            return
+
+        if self._loop_state == States.IMAGE:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
+            return
+
+        if self._loop_state == States.IP_ADDRESS:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
+                return
+
+            self.ip_screen.loop()
+            return
+
+        if self._loop_state == States.SPLASH:
+            if self._is_time_up():
+                self._next_up(States.CLOCK, 20)
             return
 
         if self._loop_state == States.CLOCK:
@@ -374,13 +462,13 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         if self._loop_state == States.UVI:
             if self.clock.is_sundown:
-                self._next_up(States.CLOCK, 20)
+                self._next_up(States.POLLEN, 10)
             elif (
                 self._is_time_up()
                 or self.data.age(UV.KEY) > 60 * 60
                 or not self.uv_index.show(mini_clock)
             ):
-                self._next_up(States.CLOCK, 20)
+                self._next_up(States.POLLEN, 10)
 
             return
 
@@ -388,26 +476,41 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
             if (
                 self._is_time_up()
                 or self.data.age(Pollen.KEY) > 60 * 60
-                or not self.pollen.show(mini_clock)  # pylint: disable=too-many-function-args
+                or not self.pollen.show(mini_clock)
             ):
-                self._next_up(States.CLOCK, 10)
+                self._next_up(States.CLOCK, 20)
 
             return
 
         self.clock.loop()
-        gc.collect()
+
+    def _data_duration(self, key, default) -> int:
+        """
+        Return the optional "duration" field (seconds) from the data stored
+        under key, or default if it's missing or invalid
+        """
+        item = self.data.get_item(key)
+        try:
+            duration = int(item["duration"])
+        except (KeyError, TypeError, ValueError):
+            return default
+
+        return duration if duration > 0 else default
 
     def _set_countdown(self, seconds) -> None:
         """
         Sets the state machine's countdown in seconds
+
+        Uses the monotonic clock: time.time() jumps when NTP corrects the
+        RTC, which could freeze the sign on one screen for hours
         """
-        self._countdown_time = time.time() + seconds
+        self._countdown_time = time.monotonic_ns() + seconds * 1_000_000_000
 
     def _is_time_up(self) -> bool:
         """
         Returns whether the state machine's current countdown has completed
         """
-        return time.time() > self._countdown_time
+        return time.monotonic_ns() > self._countdown_time
 
     def _next_up(self, state, duration) -> None:
         """
