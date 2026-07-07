@@ -15,6 +15,11 @@ jobs:
   upload-release-assets:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+          show-progress: false
       - name: Build and upload CircuitPython release assets
         uses: ./.github/actions/circuitpython-release
         with:

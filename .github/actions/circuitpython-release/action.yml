@@ -51,11 +51,6 @@ runs:
       shell: bash
       run: |
         python3 --version
-    - name: Checkout Current Repo
-      uses: actions/checkout@v6
-      with:
-        submodules: true
-        show-progress: false
     - name: Checkout tools repo
       uses: actions/checkout@v6
       with:

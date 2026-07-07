@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Unlicense
 
+default_language_version:
+  python: python3.12
+
 repos:
   - repo: https://github.com/python/black
     rev: 23.3.0
