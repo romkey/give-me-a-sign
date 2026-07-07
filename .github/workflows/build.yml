@@ -10,6 +10,10 @@ name: Build CI
 
 on: [pull_request, push]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
