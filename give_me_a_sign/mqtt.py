@@ -278,11 +278,23 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         """
         Generic endpoint used to store a received message using the specified key. Attempts to
         parse the message as JSON and stores it on success. Logs an error on failure.
+
+        Home Assistant text entities for greet/message publish plain text (not JSON).
+        Fall back to {"person": ...} / {"text": ...} for those keys so typing a name
+        or message in HA works without requiring a JSON object.
         """
         print(f"mqtt store_data! {key}", message)
         try:
             data = json.loads(message)
         except ValueError:
+            data = None
+
+        if key in ("message", "greet") and not isinstance(data, dict):
+            text = message if data is None else data
+            if not isinstance(text, str):
+                text = str(text)
+            data = {"text": text} if key == "message" else {"person": text}
+        elif data is None:
             self._app.logger.error(
                 f"server:store_data({key}) store_data failed: {message}"
             )
@@ -349,11 +361,6 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         if self._mqtt is None or not self.is_connected_to_broker():
             self._maybe_retry_mqtt()
             return
-
-        if self._home_assistant is None:
-            self._home_assistant = HomeAssistant(
-                self._app.platform.wifi_mac_address, self._mqtt, self._ha_sign_base
-            )
 
         try:
             self._home_assistant.loop()

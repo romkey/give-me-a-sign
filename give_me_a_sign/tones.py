@@ -55,20 +55,26 @@ class Tones:
         data = self._app.data.get_item(Tones.KEY)
         self._app.data.clear_updated(Tones.KEY)
 
-        # validate now: loop() runs on every app loop pass, so a malformed
-        # payload crashing there would freeze the whole sign (with the
-        # buzzer possibly stuck on)
+        # validate and normalize now: loop() runs on every app loop pass, so a
+        # malformed payload crashing there would freeze the whole sign (with
+        # the buzzer possibly stuck on). Keep converted values so string
+        # numbers that pass validation still work in loop().
         try:
             tones = data["tones"]
+            normalized = []
             for tone in tones:
-                int(tone["frequency"])
-                float(tone["duration"])
-                float(tone["volume"])
+                normalized.append(
+                    (
+                        int(tone["frequency"]),
+                        float(tone["duration"]),
+                        float(tone["volume"]),
+                    )
+                )
         except (KeyError, TypeError, ValueError):
             print("tones: bad data", data)
             return False
 
-        self._tones = data
+        self._tones = normalized
         self._current_index = -1
         self._play_until = time.monotonic()
 
@@ -88,18 +94,12 @@ class Tones:
 
         self._current_index += 1
 
-        if self._current_index == len(self._tones["tones"]):
+        if self._current_index == len(self._tones):
             self._current_index = None
             self._pwm.duty_cycle = Tones.FULL_OFF
             return
 
-        self._pwm.frequency = int(
-            self._tones["tones"][self._current_index]["frequency"]
-        )
-        self._pwm.duty_cycle = int(
-            (self._tones["tones"][self._current_index]["volume"] / 100.0)
-            * Tones.FULL_ON
-        )
-        self._play_until = (
-            time.monotonic() + self._tones["tones"][self._current_index]["duration"]
-        )
+        frequency, duration, volume = self._tones[self._current_index]
+        self._pwm.frequency = frequency
+        self._pwm.duty_cycle = int((volume / 100.0) * Tones.FULL_ON)
+        self._play_until = time.monotonic() + duration

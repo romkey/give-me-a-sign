@@ -520,22 +520,6 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         self._set_countdown(duration)
 
     @property
-    def debug(self) -> bool:
-        """
-        Returns contents of debug flag, if set
-        True -> debugging mode
-        False -> not debugging mode, or not set
-        """
-        debug = self.data.get_item("debug")
-        if debug is None:
-            return False
-
-        try:
-            return debug["debug"]
-        except KeyError:
-            return False
-
-    @property
     def platform(self):
         """
         Return the platform object

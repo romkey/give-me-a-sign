@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
+# Inlined from adafruit/workflows-circuitpython-libs/build with Node 24
+# action versions (checkout@v6, setup-python@v6, upload-artifact@v7). The
+# upstream composite still pins Node 20 actions and emits deprecation warnings.
+
 name: Build CI
 
 on: [pull_request, push]
@@ -14,12 +18,115 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Translate Repo Name For Build Tools filename_prefix
+        id: repo-name
+        shell: bash
+        run: |
+          echo repo-name=$(
+            echo ${{ github.repository }} |
+            awk -F '\/' '{ print tolower($2) }' |
+            tr '_' '-'
+          ) >> $GITHUB_OUTPUT
+
+      - name: Checkout Current Repo
         uses: actions/checkout@v6
         with:
           submodules: true
           show-progress: false
-      - name: Run CircuitPython build checks
-        uses: ./.github/actions/circuitpython-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+
+      - name: Versions
+        shell: bash
+        run: |
+          python3 --version
+
+      - name: Checkout tools repo
+        uses: actions/checkout@v6
+        with:
+          show-progress: false
+          repository: adafruit/actions-ci-circuitpython-libs
+          path: actions-ci
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          source actions-ci/install.sh
+
+      - name: Pip install Sphinx, pre-commit
+        shell: bash
+        run: |
+          pip install --force-reinstall Sphinx sphinx-rtd-theme pre-commit
+
+      - name: Library version
+        shell: bash
+        run: git describe --dirty --always --tags
+
+      - name: Setup problem matchers
+        uses: adafruit/circuitpython-action-library-ci-problem-matchers@v1
+
+      - name: Print pre-commit hook versions
+        shell: bash
+        run: |
+          python actions-ci/print_precommit_versions.py
+
+      - name: Pre-commit hooks
+        shell: bash
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          if [[ -d tests ]]; then
+            pip install pytest
+            python -m pytest
+          fi
+
+      - name: Build assets
+        shell: bash
+        run: |
+          circuitpython-build-bundles \
+            --filename_prefix ${{ steps.repo-name.outputs.repo-name }} \
+            --library_location .
+
+      - name: Archive bundles
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundles
+          path: ${{ github.workspace }}/bundles/
+
+      - name: Check for docs folder
+        id: need-docs
+        shell: bash
+        run: |
+          echo docs=$( find . -wholename './docs' ) >> $GITHUB_OUTPUT
+
+      - name: Build docs
+        if: contains(steps.need-docs.outputs.docs, 'docs')
+        working-directory: docs
+        shell: bash
+        run: sphinx-build -E -W -b html . _build/html
+
+      - name: Check For pyproject.toml
+        id: need-pypi
+        shell: bash
+        run: |
+          echo pyproject-toml=$( find . -wholename './pyproject.toml' ) >> $GITHUB_OUTPUT
+
+      - name: Check packaging information
+        if: contains(steps.need-pypi.outputs.pyproject-toml, 'pyproject.toml')
+        shell: bash
+        run: python actions-ci/check_lib_packaging.py
+
+      - name: Build Python package
+        if: contains(steps.need-pypi.outputs.pyproject-toml, 'pyproject.toml')
+        shell: bash
+        run: |
+          pip install --upgrade build twine
+          find -type f -not -path "./.*" -not -path "./docs*" \( -name "*.py" -o -name "*.toml" \) -exec sed -i -e "s/0.0.0+auto.0/1.2.3/" {} +
+          python -m build
+          twine check dist/*

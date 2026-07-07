@@ -116,7 +116,7 @@ class Clock:
 
         if (
             self._last_update_time is None
-            or time.monotonic_ns() > self._last_update_time + 1e9
+            or time.monotonic_ns() > self._last_update_time + 1_000_000_000
         ):
             self._last_update_time = time.monotonic_ns()
             self.update_time()
@@ -138,6 +138,15 @@ class Clock:
         They shoud be moved to Data with an endpoint to set them
         """
         now = time.time()
+
+        # Fresh timezone data must invalidate the cache immediately; otherwise
+        # a long cache_until (next DST transition, or forever if all transitions
+        # are past) leaves corrected/moved-zone tables unused until reboot.
+        if self._app.data.has_item(Clock.KEY_TIMEZONE) and self._app.data.is_updated(
+            Clock.KEY_TIMEZONE
+        ):
+            self._timezone_cache_until = 0
+            self._app.data.clear_updated(Clock.KEY_TIMEZONE)
 
         if (
             self._timezone_cache_until != 0 and now < self._timezone_cache_until

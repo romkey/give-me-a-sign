@@ -57,7 +57,10 @@ class Greet:
 
         try:
             person = self._app.data.get_item(Greet.KEY)["person"]
-        except KeyError:
+        except (KeyError, TypeError):
+            return False
+
+        if not isinstance(person, str):
             return False
 
         # only use their first name
