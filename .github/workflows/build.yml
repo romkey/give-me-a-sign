@@ -6,11 +6,15 @@ name: Build CI
 
 on: [pull_request, push]
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Run CircuitPython build checks
-        uses: adafruit/workflows-circuitpython-libs/build@main
+        uses: ./.github/actions/circuitpython-build
         with:
           python-version: "3.11"

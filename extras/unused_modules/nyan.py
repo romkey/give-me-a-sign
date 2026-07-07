@@ -12,7 +12,7 @@ give-me-a-sign/nyan - animated Nyan Cat module for LED Matrix display
 import gifio
 import displayio
 
-from ._paths import ASSETS_DIR
+from give_me_a_sign._paths import ASSETS_DIR
 
 # based on https://learn.adafruit.com/using-animated-gif-files-in-circuitpython/gifio
 

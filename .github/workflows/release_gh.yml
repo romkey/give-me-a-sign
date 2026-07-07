@@ -8,12 +8,15 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   upload-release-assets:
     runs-on: ubuntu-latest
     steps:
       - name: Build and upload CircuitPython release assets
-        uses: adafruit/workflows-circuitpython-libs/release-gh@main
+        uses: ./.github/actions/circuitpython-release
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           upload-url: ${{ github.event.release.upload_url }}
