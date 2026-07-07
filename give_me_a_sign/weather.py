@@ -204,15 +204,17 @@ class Weather:
         """
         weather = self._app.data.get_item("weather")
         forecast = self._app.data.get_item("forecast")
-        if weather is None and forecast is None:
+        if not isinstance(weather, dict) or not isinstance(weather.get("current"), dict):
             return False
+
+        current = weather["current"]
 
         self._app.data.clear_updated("weather")
         self._app.data.clear_updated("forecast")
 
         group = displayio.Group()
 
-        image_filename = f"{ASSETS_DIR}/w/{Weather._image_stem(weather['current'])}.bmp"
+        image_filename = f"{ASSETS_DIR}/w/{Weather._image_stem(current)}.bmp"
 
         try:
             bitmap, palette = adafruit_imageload.load(
@@ -230,12 +232,13 @@ class Weather:
             return False
 
         try:
+            temperature = int(current["temperature"])
             temp_text = adafruit_display_text.label.Label(
                 terminalio.FONT,
-                color=Weather._temp_color(int(weather["current"]["temperature"])),
-                text=str(int(weather["current"]["temperature"])),
+                color=Weather._temp_color(temperature),
+                text=str(temperature),
             )
-        except KeyError:
+        except (KeyError, TypeError, ValueError):
             return False
 
         temp_text.x = 40
@@ -243,17 +246,23 @@ class Weather:
         group.append(temp_text)
 
         try:
-            humidity = int(weather["current"]["humidity"])
+            humidity = int(current["humidity"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+        forecast_text = f"{humidity}%"
+        try:
             low = int(forecast["low"])
             high = int(forecast["high"])
-            forecast_text = "{}% {}->{}".format(humidity, low, high)
-            high_low_text = adafruit_display_text.label.Label(
-                terminalio.FONT,
-                color=0x00FF00,
-                text=forecast_text,
-            )
-        except KeyError:
-            return False
+            forecast_text = f"{humidity}% {low}->{high}"
+        except (KeyError, TypeError, ValueError):
+            pass
+
+        high_low_text = adafruit_display_text.label.Label(
+            terminalio.FONT,
+            color=0x00FF00,
+            text=forecast_text,
+        )
 
         high_low_text.x = 0
         high_low_text.y = 24

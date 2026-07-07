@@ -50,8 +50,8 @@ class UV:
         self._app.data.clear_updated(UV.KEY)
 
         try:
-            index = uvi["index"]
-        except (TypeError, KeyError):
+            index = float(uvi["index"])
+        except (TypeError, KeyError, ValueError):
             return False
 
         if index == 0:

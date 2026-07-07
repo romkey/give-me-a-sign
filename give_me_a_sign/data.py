@@ -35,7 +35,8 @@ class Data:
 
     def has_item(self, key) -> bool:
         """True if the the key has a value, False otherwise"""
-        return key in self._data
+        entry = self._data.get(key)
+        return isinstance(entry, dict) and Data.KEY_DATA in entry
 
     def set_item(self, key, data) -> None:
         """Set the value of the item associated with key"""
@@ -50,8 +51,6 @@ class Data:
 
     def get_item(self, key, default=None):
         """Get the value of the item associated with key, None if there is none"""
-        self._check_key(key)
-
         try:
             return self._data[key][Data.KEY_DATA]
         except KeyError:
@@ -59,14 +58,17 @@ class Data:
 
     def is_updated(self, key) -> bool:
         """True if the dirty flag for key is set"""
-        self._check_key(key)
-
-        return self._data[key][Data.KEY_UPDATED]
+        try:
+            return self._data[key][Data.KEY_UPDATED]
+        except KeyError:
+            return False
 
     def last_updated(self, key) -> int:
         """Return the time the key's value last changed"""
-        self._check_key(key)
-        return self._data[key][Data.KEY_LAST_UPDATED]
+        try:
+            return self._data[key][Data.KEY_LAST_UPDATED]
+        except KeyError:
+            return 0
 
     def age(self, key) -> int:
         """Return the age of the key's value"""
@@ -74,14 +76,12 @@ class Data:
 
     def clear_updated(self, key) -> None:
         """Clear the dirty flag for the key"""
-        self._check_key(key)
-
-        if not self._data[key][Data.KEY_UPDATED]:
+        try:
+            if not self._data[key][Data.KEY_UPDATED]:
+                return
+            self._data[key][Data.KEY_UPDATED] = False
+        except KeyError:
             return
-
-        self._data[key][Data.KEY_UPDATED] = False
-
-    #        self._save()
 
     def all(self) -> dict:
         """Returns the entire dictionary. Not really recommended, but used for debugging"""
@@ -133,5 +133,16 @@ class Data:
             return False
         except ValueError:  # raised when the contents of the file are invalid JSON
             return False
+
+        # Drop empty shells left by older code that created keys on read, and
+        # clear dirty flags: they were whatever was in-flight when timezone
+        # last triggered _save, and replaying them would re-show an old
+        # message/greet once.
+        for key in list(self._data.keys()):
+            entry = self._data[key]
+            if not isinstance(entry, dict) or Data.KEY_DATA not in entry:
+                del self._data[key]
+            else:
+                entry[Data.KEY_UPDATED] = False
 
         return True

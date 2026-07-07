@@ -35,14 +35,14 @@ class Image:
         try:
             if image is None or image["filename"] is None:
                 return False
-        except KeyError:
+        except (KeyError, TypeError):
             return False
 
         try:
             bitmap, palette = adafruit_imageload.load(
                 image["filename"], bitmap=displayio.Bitmap, palette=displayio.Palette
             )
-        except OSError:
+        except (OSError, NotImplementedError, TypeError):
             return False
 
         tile_grid = displayio.TileGrid(bitmap, pixel_shader=palette)

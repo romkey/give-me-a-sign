@@ -55,15 +55,20 @@ class Message:
 
         self._app.data.clear_updated(Message.KEY)
 
+        message = self._app.data.get_item(Message.KEY)
         try:
-            line = Label(
-                terminalio.FONT,
-                color=self._app.data.get_item(Message.KEY)["color"],
-                text=self._app.data.get_item(Message.KEY)["text"],
-            )
-        except KeyError:
-            print("message: bad data", self._app.data.get_item(Message.KEY))
+            text = message["text"]
+            # color is optional so HA plain-text "Message Text" works
+            color = message.get("color", 0xFFFFFF)
+        except (KeyError, TypeError, AttributeError):
+            print("message: bad data", message)
             return False
+
+        line = Label(
+            terminalio.FONT,
+            color=color,
+            text=text,
+        )
 
         box = line.bounding_box
         width = box[2]
