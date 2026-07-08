@@ -79,12 +79,12 @@ class Power:
             time.sleep(5)
             microcontroller.reset()
 
-        print(
+        print(  # codeql[py/clear-text-logging-sensitive-data]
             "MAC address ",
             ":".join(
                 "%02x" % b
                 # pylint: disable=consider-using-f-string,line-too-long
-                for b in self.esp.MAC_address_actual  # codeql[py/clear-text-logging-sensitive-data]
+                for b in self.esp.MAC_address_actual
             ),
         )
 

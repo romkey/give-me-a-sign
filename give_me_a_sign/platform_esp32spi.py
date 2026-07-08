@@ -95,12 +95,12 @@ class Platform:
                 self._wifi_backoff_s = min(self._wifi_backoff_s * 2, WIFI_RETRY_MAX_S)
                 return
 
-            print(
+            print(  # codeql[py/clear-text-logging-sensitive-data]
                 "MAC address ",
                 ":".join(
                     "%02x" % b
                     # pylint: disable=consider-using-f-string,line-too-long
-                    for b in self.esp.MAC_address_actual  # codeql[py/clear-text-logging-sensitive-data]
+                    for b in self.esp.MAC_address_actual
                 ),
             )
 
