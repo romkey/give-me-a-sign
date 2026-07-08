@@ -24,7 +24,7 @@ jobs:
         run: |
           echo repo-name=$(
             echo ${{ github.repository }} |
-            awk -F '\/' '{ print tolower($2) }' |
+            awk -F '/' '{ print tolower($2) }' |
             tr '_' '-'
           ) >> $GITHUB_OUTPUT
 

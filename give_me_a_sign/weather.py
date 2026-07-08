@@ -171,6 +171,17 @@ class Weather:
 
         return "50d"
 
+    @staticmethod
+    def _forecast_text(forecast, humidity) -> str:
+        text = f"{humidity}%"
+        try:
+            low = int(forecast["low"])
+            high = int(forecast["high"])
+            text = f"{humidity}% {low}->{high}"
+        except (KeyError, TypeError, ValueError):
+            pass
+        return text
+
     def show(self) -> bool:
         """
         Display the current weather conditions if valid.
@@ -252,13 +263,7 @@ class Weather:
         except (KeyError, TypeError, ValueError):
             return False
 
-        forecast_text = f"{humidity}%"
-        try:
-            low = int(forecast["low"])
-            high = int(forecast["high"])
-            forecast_text = f"{humidity}% {low}->{high}"
-        except (KeyError, TypeError, ValueError):
-            pass
+        forecast_text = Weather._forecast_text(forecast, humidity)
 
         high_low_text = adafruit_display_text.label.Label(
             terminalio.FONT,
