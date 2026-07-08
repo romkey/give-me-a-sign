@@ -83,7 +83,8 @@ class Power:
             "MAC address ",
             ":".join(
                 "%02x" % b
-                for b in self.esp.MAC_address_actual  # pylint: disable=consider-using-f-string,line-too-long
+                # pylint: disable=consider-using-f-string,line-too-long
+                for b in self.esp.MAC_address_actual  # codeql[py/clear-text-logging-sensitive-data]
             ),
         )
 
