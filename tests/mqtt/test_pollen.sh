@@ -6,4 +6,4 @@
 set -e
 . "$(dirname "$0")/_common.sh"
 
-publish_all pollen '{"pollen": 7}'
+publish_all pollen '{"tree": 7, "grass": 3}'

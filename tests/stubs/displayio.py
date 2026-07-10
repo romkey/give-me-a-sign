@@ -13,18 +13,27 @@ class Group(list):
         self.y = y
 
 
+class Palette:
+    def __init__(self, count):
+        self._colors = [0] * count
+        self._transparent = None
+
+    def __setitem__(self, index, value):
+        self._colors[index] = value
+
+    def make_transparent(self, index):
+        self._transparent = index
+
+
 class Bitmap:
     def __init__(self, width, height, colors):
         self.width = width
         self.height = height
+        self._colors = colors
+        self._pixels = {}
 
-
-class Palette:
-    def __init__(self, count):
-        self._colors = [0] * count
-
-    def __setitem__(self, index, value):
-        self._colors[index] = value
+    def __setitem__(self, pos, value):
+        self._pixels[pos] = value
 
 
 class TileGrid:
