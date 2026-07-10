@@ -4,5 +4,5 @@
 
 """Package version metadata."""
 
-__version__ = "0.0.0+auto.0"
+__version__ = "0.0.1+auto.0"
 __repo__ = "https://github.com/romkey/give-me-a-sign.git"

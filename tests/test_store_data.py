@@ -64,6 +64,11 @@ def test_store_json_string_message(sign_mqtt):
     assert sign_mqtt._app.data.get_item("message") == {"text": "hello"}
 
 
+def test_store_message_dict_with_message_key(sign_mqtt):
+    sign_mqtt.store_data("message", '{"message": "notify text"}')
+    assert sign_mqtt._app.data.get_item("message") == {"text": "notify text"}
+
+
 def test_store_json_string_greet(sign_mqtt):
     sign_mqtt.store_data("greet", '"Jane D."')
     assert sign_mqtt._app.data.get_item("greet") == {"person": "Jane D."}

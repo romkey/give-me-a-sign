@@ -451,6 +451,10 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             if not isinstance(text, str):
                 text = str(text)
             data = {"text": text} if key == "message" else {"person": text}
+        elif key == "message" and isinstance(data, dict):
+            # HA notify payloads commonly use {"message": "..."}.
+            if "text" not in data and isinstance(data.get("message"), str):
+                data = {"text": data["message"]}
         elif data is None:
             self._app.logger.error(
                 f"server:store_data({key}) store_data failed: {message}"
@@ -474,9 +478,12 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         flash_size = flash[0] * flash[2]
         flash_free = flash[0] * flash[3]
 
+        now_utc = time.time()
+
         info = {
             "uptime": time.monotonic_ns() / 1e9,
-            "time_utc": time.time(),
+            "time_utc": now_utc,
+            "time_utc_iso": self._epoch_to_iso_utc(now_utc),
             "timezone_offset": self._app.clock.timezone_offset,
             "free_memory": gc.mem_free(),  # pylint: disable=no-member
             "flash_free": flash_free,

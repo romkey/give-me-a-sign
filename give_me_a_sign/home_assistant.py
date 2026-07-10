@@ -68,29 +68,30 @@ class HomeAssistant:
             "free_memory": {
                 "name": "Free Memory",
                 "value_template": "{{ (value_json.free_memory / 1024 / 1024) | round(2) }}",
-                "unit_of_measurement": "MB",
+                "unit_of_measurement": "MiB",
                 "device_class": "data_size",
+                "state_class": "measurement",
                 "icon": "mdi:memory",
             },
             "flash_free": {
                 "name": "Flash Free",
                 "value_template": "{{ (value_json.flash_free / 1024 / 1024) | round(2) }}",
-                "unit_of_measurement": "MB",
+                "unit_of_measurement": "MiB",
                 "device_class": "data_size",
+                "state_class": "measurement",
                 "icon": "mdi:harddisk",
             },
             "flash_size": {
                 "name": "Flash Size",
                 "value_template": "{{ (value_json.flash_size / 1024 / 1024) | round(2) }}",
-                "unit_of_measurement": "MB",
+                "unit_of_measurement": "MiB",
                 "device_class": "data_size",
+                "state_class": "measurement",
                 "icon": "mdi:harddisk",
             },
             "last_update": {
                 "name": "Last Update",
-                "value_template": (
-                    "{{ as_datetime(value_json.time_utc).isoformat() }}"
-                ),
+                "value_template": "{{ value_json.time_utc_iso }}",
                 "device_class": "timestamp",
                 "icon": "mdi:clock",
             },
@@ -98,6 +99,7 @@ class HomeAssistant:
                 "name": "Timezone Offset",
                 "value_template": "{{ (value_json.timezone_offset / 3600) | round(1) }}",
                 "unit_of_measurement": "hours",
+                "state_class": "measurement",
                 "icon": "mdi:clock-time-eight",
             },
             "time_utc": {
@@ -124,6 +126,7 @@ class HomeAssistant:
                 "value_template": "{{ value_json.wifi_rssi }}",
                 "unit_of_measurement": "dBm",
                 "device_class": "signal_strength",
+                "state_class": "measurement",
                 "icon": "mdi:wifi",
             },
             "wifi_ssid": {
@@ -151,6 +154,7 @@ class HomeAssistant:
                 "value_template": "{{ value_json.uptime | int }}",
                 "unit_of_measurement": "s",
                 "device_class": "duration",
+                "state_class": "measurement",
                 "icon": "mdi:clock",
             },
             "rtc_status": {
@@ -234,6 +238,8 @@ class HomeAssistant:
                 payload["unit_of_measurement"] = sensor_config["unit_of_measurement"]
             if "device_class" in sensor_config:
                 payload["device_class"] = sensor_config["device_class"]
+            if "state_class" in sensor_config:
+                payload["state_class"] = sensor_config["state_class"]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 
@@ -259,6 +265,8 @@ class HomeAssistant:
                 ]
             if "device_class" in diagnostic_config:
                 payload["device_class"] = diagnostic_config["device_class"]
+            if "state_class" in diagnostic_config:
+                payload["state_class"] = diagnostic_config["state_class"]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 
@@ -283,6 +291,10 @@ class HomeAssistant:
             # notify entity can't share the text entity's id
             notify_payload = dict(payload)
             notify_payload["unique_id"] = f"{self._device_id}_{text_key}_notify"
+            if text_key == "message":
+                # Home Assistant's notify service typically sends {"message": "..."}.
+                # Map that to the plain-text payload expected by this command topic.
+                notify_payload["command_template"] = "{{ value_json.message }}"
             autodiscovery_messages.append(
                 {"topic": topic_notify, "payload": notify_payload}
             )
@@ -359,7 +371,7 @@ class HomeAssistant:
             payload = json.dumps(message["payload"])
 
             # Publish with retain=True so Home Assistant can discover after restart
-            self._mqtt_client.publish(topic, payload, retain=True)
+            self._mqtt_client.publish(topic, payload, retain=True, qos=1)
 
         print(f"Published {len(advertisements)} autodiscovery messages")
 
