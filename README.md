@@ -119,26 +119,58 @@ the device. Bundle entries use **import names** (for example
 `adafruit_minimqtt`, `adafruit_ntp`) as in
 [the CircuitPython library bundle](https://circuitpython.org/libraries).
 
-### Development vs release installs
+### Install from a GitHub release
 
-For local development, install the package as `.py` so code remains readable on
-the device:
+Each release publishes **several** zip files. Pick the one that matches how you
+want to install:
+
+| Asset | Contents | Use when |
+|-------|----------|----------|
+| `give-me-a-sign-10.x-mpy-*.zip` | Precompiled `.mpy` under `lib/` | **Matrix Portal S3** and other **CircuitPython 10.x** boards (recommended) |
+| `give-me-a-sign-9.x-mpy-*.zip` | Precompiled `.mpy` under `lib/` | CircuitPython 9.x boards |
+| `give-me-a-sign-py-*.zip` | Source `.py` under `lib/` | Debugging or boards where you want readable source on device |
+| `give-me-a-sign-examples-*.zip` | `examples/give-me-a-sign/code.py` and sample settings | Example app only (not the library) |
+
+Do **not** use GitHub’s auto-generated **“Source code (zip)”** at the bottom of
+the release page — that is the git tree (`.py` source), not the built library
+bundle.
+
+**Manual install (mpy):**
+
+1. Download `give-me-a-sign-10.x-mpy-*.zip` from the
+   [latest release](https://github.com/romkey/give-me-a-sign/releases).
+2. Unzip and copy `lib/give_me_a_sign/` to `CIRCUITPY/lib/give_me_a_sign/`.
+3. Copy `examples/give-me-a-sign/code.py` from the same zip (or from
+   `give-me-a-sign-examples-*.zip`) to `CIRCUITPY/code.py`.
+4. Install bundle dependencies with circup (they are not inside the release zip):
 
 ```bash
-circup install -r requirements.txt ./give_me_a_sign --py --upgrade
+circup install -r requirements-circuitpython.txt --upgrade
+```
+
+**Install with circup (mpy release zip):**
+
+```bash
+unzip give-me-a-sign-10.x-mpy-0.5.2.zip
+circup install -r requirements-circuitpython.txt \
+  ./give-me-a-sign-10.x-mpy-0.5.2/lib/give_me_a_sign --upgrade
+```
+
+Circup copies the prebuilt `.mpy` package from the path you give it and pulls
+Adafruit bundle libraries from the official bundles. Omit `--py` when using an
+mpy release zip; `--py` forces source copies.
+
+### Development vs release installs
+
+For local development from a git clone, install the package as `.py` so code
+remains readable on the device:
+
+```bash
+circup install -r requirements-circuitpython.txt ./give_me_a_sign --py --upgrade
 ```
 
 On every push and pull request, Build CI runs `circuitpython-build-bundles` and
-uploads a `bundles` artifact with:
-
-- `give-me-a-sign-10.x-mpy-*.zip` (and 9.x) — precompiled `.mpy` under `lib/`
-- `give-me-a-sign-py-*.zip` — source `.py` under `lib/`
-- examples and metadata JSON
-
-Download those from the Actions run’s Artifacts section. For public distribution,
-publish a GitHub Release with a SemVer tag (for example `0.5.2`). Release CI
-rebuilds the same zips and attaches them to the release; build tools stamp
-`__version__` from that tag.
+uploads a `bundles` artifact with the same zip names as GitHub releases.
 
 ### CircuitPython Community Bundle
 
@@ -173,8 +205,15 @@ https://circuitpython.org/board/adafruit_matrixportal_s3/
 ## Installation
 
 1. Install CircuitPython on the board and mount `CIRCUITPY`.
-2. Install libraries: from this repo run `circup install -r requirements-circuitpython.txt ./give_me_a_sign --py --upgrade` so bundle dependencies and the `give_me_a_sign` package are copied to `lib/`.
-3. Copy `examples/code.py` to the root of `CIRCUITPY` (or merge into your own `code.py`), and add `settings.toml` / environment as needed.
+2. Install the library from a release (see **Install from a GitHub release**
+   above) or, for development, from a clone:
+
+```bash
+circup install -r requirements-circuitpython.txt ./give_me_a_sign --py --upgrade
+```
+
+3. Copy `examples/code.py` to the root of `CIRCUITPY` (or merge into your own
+   `code.py`), and add `settings.toml` / environment as needed.
 
 ## API
 
