@@ -60,9 +60,23 @@ jobs:
       - name: Build assets
         shell: bash
         run: |
+          find . \( -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store' \) \
+            -not -path './.git/*' -print -delete
           circuitpython-build-bundles \
             --filename_prefix ${{ steps.repo-name.outputs.repo-name }} \
             --library_location .
+
+      - name: Verify mpy bundles
+        shell: bash
+        run: |
+          echo "Built bundles:"
+          ls -la bundles/
+          shopt -s nullglob
+          mpy_zips=(bundles/*-mpy-*.zip)
+          if (( ${#mpy_zips[@]} == 0 )); then
+            echo "::error::No *-mpy-*.zip bundles were produced"
+            exit 1
+          fi
 
       - name: Upload Release Assets
         uses: shogo82148/actions-upload-release-asset@v1

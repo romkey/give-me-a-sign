@@ -63,10 +63,13 @@ inherently more difficult to do so.
 
 ## Hardware
 
-This code is designed to run on an [Adafruit MatrixPortal
-M4](https://www.adafruit.com/product/4745) board connected to a 64x32
-LED matrix. It should work with other Adafruit Matrix products but it
-hasn't been tested with them and might need adapting.
+This code targets boards with **native WiFi** and enough RAM for the full
+application, such as the [Adafruit Matrix Portal
+S3](https://www.adafruit.com/product/5778) connected to a 64x32 LED matrix.
+The older Matrix Portal M4 (SAMD51 + AirLift ESP32 co-processor) is no longer
+supported — there is not enough RAM to run the sign reliably.
+
+Other native-WiFi matrix setups may work but have not been tested.
 
 ### Larger displays
 
@@ -87,18 +90,18 @@ MATRIX_BIT_DEPTH = 2       # color depth; higher uses more RAM/CPU
 Content is laid out on a virtual 64x32 canvas and integer-scaled to fit
 the display, centered. Sizes that aren't proportional to 64x32 (say
 128x32) scale by the common factor and letterbox the rest. Images pushed
-to the `image` endpoint that are larger than 64x32 are shown unscaled at
+to the `image` module via MQTT that are larger than 64x32 are shown unscaled at
 the display's native resolution.
 
 ## Software
 
 This project is written in CircuitPython. It depends on several
-libraries that help manage the LED matrix, the ESP32 wifi
-co-processor, the buttons, and the RTC modules.
+libraries that help manage the LED matrix, WiFi, the buttons, and the
+RTC modules.
 
 The application ships as a CircuitPython **library package** named
 `give_me_a_sign` (import `GiveMeASign` from it). The package loads the
-other modules, runs the HTTP API, and drives the main display loop.
+other modules, connects to MQTT, and drives the main display loop.
 Fonts, splash images, and weather BMPs live in **`give_me_a_sign/assets/`**
 (next to the `.py` files under `/lib/give_me_a_sign/` on the device).
 
@@ -113,7 +116,7 @@ circup install -r requirements.txt ./give_me_a_sign --py
 CircUp reads `requirements.txt` for bundle library names and copies the
 local `give_me_a_sign` package; use `--upgrade` if copies already exist on
 the device. Bundle entries use **import names** (for example
-`adafruit_minimqtt`, `adafruit_httpserver`) as in
+`adafruit_minimqtt`, `adafruit_ntp`) as in
 [the CircuitPython library bundle](https://circuitpython.org/libraries).
 
 ### Development vs release installs
@@ -125,50 +128,42 @@ the device:
 circup install -r requirements.txt ./give_me_a_sign --py --upgrade
 ```
 
-For distribution, publish GitHub Releases. CI builds and uploads precompiled
-`.mpy` assets automatically when a release is published.
+On every push and pull request, Build CI runs `circuitpython-build-bundles` and
+uploads a `bundles` artifact with:
 
-### CircuitPython Community Bundle compatibility
+- `give-me-a-sign-10.x-mpy-*.zip` (and 9.x) — precompiled `.mpy` under `lib/`
+- `give-me-a-sign-py-*.zip` — source `.py` under `lib/`
+- examples and metadata JSON
 
-This repo is set up to be compatible with the
+Download those from the Actions run’s Artifacts section. For public distribution,
+publish a GitHub Release with a SemVer tag (for example `0.5.2`). Release CI
+rebuilds the same zips and attaches them to the release; build tools stamp
+`__version__` from that tag.
+
+### CircuitPython Community Bundle
+
+This repo follows the
 [CircuitPython Community Bundle](https://github.com/adafruit/CircuitPython_Community_Bundle)
-release tooling:
+library layout and CI (`circuitpython-build-tools`). To get into the bundle:
 
-- CI validates build compatibility on push and pull requests.
-- Release CI builds `.mpy` artifacts from tagged releases.
-- Versions should use SemVer tags (for example `0.5.2`).
+1. Land a SemVer-tagged GitHub Release (for example `0.5.2`) so release assets
+   include stamped `.mpy` zips.
+2. Fork `adafruit/CircuitPython_Community_Bundle`, add this repo as a submodule
+   under `libraries/helpers/give_me_a_sign` (or another fitting category), and
+   update `circuitpython_community_library_list.md`.
+3. Open a PR against the Community Bundle. After merge, daily bundle releases
+   pick up new tags from this repo automatically.
 
-To include this library in the Community Bundle, submit a PR there that adds
-this repository as a submodule in the correct `libraries/` category and updates
-`circuitpython_community_library_list.md`.
+See Adafruit’s guide:
+[Sharing in the Community Bundle](https://learn.adafruit.com/creating-and-sharing-a-circuitpython-library/sharing-in-the-community-bundle).
 
 ## Preparing The Sign
 
-### Update ESP32
-
-The Matrix Portal uses an ESP32 as a network co-processor. The
-firmware isn't under active development, but we'd like to be running
-the latest available firmware.
-
-Our Matrix Portals came with 1.2.2, as of this writing the current version is 1.7.4.
-
-
-https://learn.adafruit.com/upgrading-esp32-firmware/upgrade-all-in-one-esp32-airlift-firmware
-
-
 ### Update CircuitPython
 
+Install the latest CircuitPython for your board, for example:
 
-
-https://circuitpython.org/board/matrixportal_m4/
-
-### Update UF2 Bootloader
-
-This is the least necessary of the updates. If the bootloader is
-working then it doesn't need to be updated, but it can be helpful to
-run the latest code.
-
-https://circuitpython.org/board/matrixportal_m4/
+https://circuitpython.org/board/adafruit_matrixportal_s3/
 
 ## Mounting
 
@@ -183,6 +178,28 @@ https://circuitpython.org/board/matrixportal_m4/
 
 ## API
 
+Data is pushed to the sign over **MQTT**, not HTTP. Each sign subscribes to
+topics under `MQTT_TOPIC_PREFIX` (default `givemeasign`):
+
+- `{prefix}/all/module/{endpoint}` — broadcast to every sign
+- `{prefix}/sign/{mac}/module/{endpoint}` — per-device (used by Home Assistant)
+
+Supported `{endpoint}` values include `weather`, `message`, `greet`, `aqi`, `uv`,
+`pollen`, `forecast`, `lunar`, `tones`, `image`, `timezone`, `solar`, `trimet`,
+and `debug`. Payloads are JSON objects (plain text is accepted for `message` and
+`greet`).
+
+Per-device command topics (under `{prefix}/sign/{mac}/`):
+
+| Topic | Payload | Effect |
+|-------|---------|--------|
+| `reboot` | any | MCU reset |
+| `display/set` | `ON` / `OFF` | Blank or show the matrix |
+| `time/set` | ISO 8601 UTC, epoch, or `{"epoch": …}` | Set the device RTC |
+| `data/publish` | any | Publish the full Data store to `data/state` |
+
+Home Assistant autodiscovery is built in when MQTT is configured. See
+`give_me_a_sign/home_assistant.py` for entity definitions.
 
 ## Displaying Images
 
@@ -204,11 +221,32 @@ https://github.com/adafruit/Adafruit_CircuitPython_Bitmap_Font
 
 ## Home Assistant
 
+Configure MQTT in `settings.toml` and set `SIGN_NAME` if you want a friendly
+device name in Home Assistant. The sign publishes MQTT autodiscovery configs
+for text entities, a display switch, a device-time datetime, reboot and
+publish-data buttons, and diagnostic sensors.
+
+Example — publish a message via MQTT (mosquitto_pub):
+
 ```
-service: rest_command.sign_tones
-data:
-  target: 10.0.1.123
-  tones: '{ "frequency": 425, "duration": 0.5, "volume": 100 }, { "frequency": 100, "duration": 0.5, "volume": 100}'
+mosquitto_pub -h broker -t 'givemeasign/all/module/message' \
+  -m '{"text": "Hello!", "color": 16711680}'
+```
+
+Set the clock (ISO 8601 UTC, as Home Assistant's datetime entity sends):
+
+```
+mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/time/set' \
+  -m '2026-07-10T12:00:00+00:00'
+```
+
+Dump the in-memory Data store (also available as the **Publish Data Store**
+button in Home Assistant):
+
+```
+mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/data/publish' \
+  -m publish
+# then: mosquitto_sub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/data/state' -C 1
 ```
 
 ## Timezones

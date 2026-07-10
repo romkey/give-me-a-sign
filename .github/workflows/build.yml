@@ -89,15 +89,44 @@ jobs:
       - name: Build assets
         shell: bash
         run: |
+          # circuitpython-build-bundles packs every file under the package;
+          # drop host junk so it never lands in release zips.
+          find . \( -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store' \) \
+            -not -path './.git/*' -print -delete
           circuitpython-build-bundles \
             --filename_prefix ${{ steps.repo-name.outputs.repo-name }} \
             --library_location .
+
+      - name: Verify mpy bundles
+        shell: bash
+        run: |
+          echo "Built bundles:"
+          ls -la bundles/
+          shopt -s nullglob
+          mpy_zips=(bundles/*-mpy-*.zip)
+          if (( ${#mpy_zips[@]} == 0 )); then
+            echo "::error::No *-mpy-*.zip bundles were produced"
+            exit 1
+          fi
+          for zip in "${mpy_zips[@]}"; do
+            echo "--- $zip ---"
+            unzip -l "$zip" | head -40
+            if unzip -l "$zip" | grep -E '__pycache__|\.pyc|\.DS_Store'; then
+              echo "::error::$zip contains host junk (__pycache__ / .pyc / .DS_Store)"
+              exit 1
+            fi
+            if ! unzip -l "$zip" | grep -q '\.mpy$'; then
+              echo "::error::$zip contains no .mpy files"
+              exit 1
+            fi
+          done
 
       - name: Archive bundles
         uses: actions/upload-artifact@v7
         with:
           name: bundles
           path: ${{ github.workspace }}/bundles/
+          if-no-files-found: error
 
       - name: Check for docs folder
         id: need-docs

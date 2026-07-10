@@ -39,22 +39,14 @@ import terminalio
 import microcontroller
 import rtc
 
-try:
-    from .platform_native import Platform
-except ImportError:
-    from .platform_esp32spi import Platform
-
-# except:
-#  import platform_esp32spi
-
 from adafruit_debouncer import Button
 import adafruit_logging as Logger
 import adafruit_display_text.label
 
+from .platform import Platform
+
 from .data import Data
 from ._paths import ASSETS_DIR
-
-# from syslogger import SyslogUDPHandler
 
 from .clock import Clock
 from .greet import Greet
@@ -223,14 +215,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
         self.clock = Clock(self)  # pylint: disable=attribute-defined-outside-init
 
-        #        syslogger = os.getenv("syslogger")
-        #        if syslogger is not None:
-        #            self.logger.addHandler(SyslogUDPHandler(self, syslogger))
-        #            self.logger.info("Syslogger set up")
-        #        else:
-        #            self.logger.info("No syslogger")
-
-        self._platform.start_servers()
+        self._platform.start_mqtt()
 
         self.greeter = Greet(self)  # pylint: disable=attribute-defined-outside-init
         self.weather = Weather(self)  # pylint: disable=attribute-defined-outside-init
@@ -244,7 +229,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
     def _setup_buttons(self):
         """
-        Hardware setup for the buttons on the Matrix Portal board
+        Hardware setup for the buttons on the Matrix Portal S3 board
         """
         pin = digitalio.DigitalInOut(board.BUTTON_UP)
         pin.direction = digitalio.Direction.INPUT
@@ -299,7 +284,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         """
         This does all the work
 
-        It allows the web server to run, checks the state of the buttons, and runs the
+        It services MQTT, checks the state of the buttons, and runs the
         state machine that decides what to display on the LED matrix
         """
         self._platform.loop()

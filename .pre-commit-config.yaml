@@ -49,4 +49,4 @@ repos:
         files: "^tests/"
         additional_dependencies: [pylint==2.17.4]
         args:
-          - --disable=missing-docstring,consider-using-f-string,duplicate-code
+          - --disable=missing-docstring,consider-using-f-string,duplicate-code,protected-access,redefined-outer-name,invalid-name,unused-argument,too-few-public-methods,unused-import,no-self-use

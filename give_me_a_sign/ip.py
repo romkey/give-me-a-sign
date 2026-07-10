@@ -28,7 +28,7 @@ class IP:
 
     def show(self) -> bool:
         """
-        Fetch the IP address from the ESP32 and then display it on the screen.
+        Fetch the WiFi IP address and display it on the screen.
         """
         self._line = ScrollingLabel(
             terminalio.FONT,

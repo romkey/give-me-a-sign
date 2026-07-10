@@ -93,6 +93,10 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         self._ha_sign_base = f"{self._topic_prefix}/sign/{self._id}"
         self._display_state_topic = f"{self._ha_sign_base}/display/state"
         self._display_command_topic = f"{self._ha_sign_base}/display/set"
+        self._time_state_topic = f"{self._ha_sign_base}/time/state"
+        self._time_command_topic = f"{self._ha_sign_base}/time/set"
+        self._data_state_topic = f"{self._ha_sign_base}/data/state"
+        self._data_publish_topic = f"{self._ha_sign_base}/data/publish"
 
         self._mqtt = None
         self._mqtt_loop_timeout = 1
@@ -112,37 +116,24 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
     def _build_mqtt_client(self):
         socket = self._platform.get_socket()
 
-        if not self._platform.native:
-            MQTT.set_socket(socket, self._platform.esp)
-
-            self._mqtt = MQTT.MQTT(
-                broker=os.getenv("MQTT_BROKER"),
-                port=_get_setting("MQTT_PORT", 1883),
-                is_ssl=_get_setting("MQTT_SSL", False),
-                client_id=os.getenv("MQTT_CLIENTID"),
-                username=os.getenv("MQTT_USERNAME"),
-                password=os.getenv("MQTT_PASSWORD"),
-            )
-            self._mqtt_loop_timeout = 1
-        else:
-            # A small socket timeout keeps loop() from stalling the display
-            # loop for seconds at a time. It's also used as the TCP connect
-            # timeout, so don't make it too small.
-            self._mqtt = MQTT.MQTT(
-                broker=os.getenv("MQTT_BROKER"),
-                port=_get_setting("MQTT_PORT", 1883),
-                is_ssl=_get_setting("MQTT_SSL", False),
-                client_id=os.getenv("MQTT_CLIENTID"),
-                username=os.getenv("MQTT_USERNAME"),
-                password=os.getenv("MQTT_PASSWORD"),
-                socket_pool=socket,
-                socket_timeout=0.25,
-                # a single bounded attempt per connect() call; otherwise
-                # MiniMQTT retries internally with sleeps of up to ~30s each,
-                # freezing the display. SignMQTT owns the retry/backoff policy.
-                connect_retries=1,
-            )
-            self._mqtt_loop_timeout = 0.25
+        # A small socket timeout keeps loop() from stalling the display
+        # loop for seconds at a time. It's also used as the TCP connect
+        # timeout, so don't make it too small.
+        self._mqtt = MQTT.MQTT(
+            broker=os.getenv("MQTT_BROKER"),
+            port=_get_setting("MQTT_PORT", 1883),
+            is_ssl=_get_setting("MQTT_SSL", False),
+            client_id=os.getenv("MQTT_CLIENTID"),
+            username=os.getenv("MQTT_USERNAME"),
+            password=os.getenv("MQTT_PASSWORD"),
+            socket_pool=socket,
+            socket_timeout=0.25,
+            # a single bounded attempt per connect() call; otherwise
+            # MiniMQTT retries internally with sleeps of up to ~30s each,
+            # freezing the display. SignMQTT owns the retry/backoff policy.
+            connect_retries=1,
+        )
+        self._mqtt_loop_timeout = 0.25
 
         print("MQTT Connect")
         self._mqtt.will_set(
@@ -178,6 +169,16 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             self._display_command_topic, self._on_display_command
         )
 
+        # Home Assistant datetime entity + programmatic epoch/JSON payloads
+        self._mqtt.subscribe(self._time_command_topic)
+        self._mqtt.add_topic_callback(self._time_command_topic, self._on_time_command)
+
+        # Home Assistant "Publish Data" button dumps the in-memory store
+        self._mqtt.subscribe(self._data_publish_topic)
+        self._mqtt.add_topic_callback(
+            self._data_publish_topic, self._on_publish_data_command
+        )
+
     def _mqtt_connect_and_subscribe(self):
         self._mqtt.connect()
         self._subscribe_all_topics()
@@ -192,6 +193,7 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         # waiting for the hourly advertisement cycle
         self._home_assistant.publish_online_status()
         self.publish_display_state()
+        self.publish_time_state()
         self._mqtt_failures = 0
         self._mqtt_backoff_s = MQTT_RETRY_MIN_S
         self._mqtt_next_retry_at = 0
@@ -267,12 +269,167 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             return
         self.publish_display_state()
 
+    @staticmethod
+    def _epoch_to_iso_utc(epoch):
+        """Format a Unix epoch as ISO 8601 UTC for the HA datetime entity."""
+        utc_tm = time.localtime(int(epoch))
+        return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}+00:00".format(
+            utc_tm.tm_year,
+            utc_tm.tm_mon,
+            utc_tm.tm_mday,
+            utc_tm.tm_hour,
+            utc_tm.tm_min,
+            utc_tm.tm_sec,
+        )
+
+    @staticmethod
+    def _parse_iso8601_utc(text):  # pylint: disable=too-many-return-statements
+        """
+        Parse an ISO 8601 UTC datetime string into a Unix epoch.
+
+        Accepts the formats Home Assistant's MQTT datetime entity sends, e.g.
+        2026-07-10T05:00:00, ...Z, ...+00:00, and optional fractional seconds.
+        Non-UTC offsets are applied so the result is still a UTC epoch.
+        """
+        text = text.strip()
+        if not text or text[0] < "0" or text[0] > "9":
+            return None
+
+        # Split timezone suffix: Z / z / ±HH:MM / ±HHMM
+        offset_seconds = 0
+        body = text
+        if body.endswith("Z") or body.endswith("z"):
+            body = body[:-1]
+        elif len(body) >= 6 and (body[-6] in "+-" and body[-3] == ":"):
+            sign = 1 if body[-6] == "+" else -1
+            try:
+                offset_seconds = sign * (int(body[-5:-3]) * 3600 + int(body[-2:]) * 60)
+            except ValueError:
+                return None
+            body = body[:-6]
+        elif len(body) >= 5 and body[-5] in "+-":
+            sign = 1 if body[-5] == "+" else -1
+            try:
+                offset_seconds = sign * (int(body[-4:-2]) * 3600 + int(body[-2:]) * 60)
+            except ValueError:
+                return None
+            body = body[:-5]
+
+        # Drop fractional seconds if present
+        if "." in body:
+            body = body.split(".", 1)[0]
+
+        # YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS
+        body = body.replace(" ", "T", 1)
+        parts = body.split("T")
+        if len(parts) != 2:
+            return None
+        try:
+            year_s, month_s, day_s = parts[0].split("-")
+            time_parts = parts[1].split(":")
+            if len(time_parts) < 2:
+                return None
+            hour_s = time_parts[0]
+            minute_s = time_parts[1]
+            second_s = time_parts[2] if len(time_parts) > 2 else "0"
+            struct = time.struct_time(
+                (
+                    int(year_s),
+                    int(month_s),
+                    int(day_s),
+                    int(hour_s),
+                    int(minute_s),
+                    int(float(second_s)),
+                    0,
+                    0,
+                    -1,
+                )
+            )
+            # RTC/time source is UTC; mktime treats the struct as local (= UTC here)
+            return int(time.mktime(struct)) - offset_seconds
+        except (ValueError, OverflowError, TypeError):
+            return None
+
+    def _parse_time_payload(self, message):
+        """
+        Accept HA ISO datetime strings, a bare epoch, or JSON {"epoch": ...}.
+        Returns a Unix epoch int, or None if the payload is unusable.
+        """
+        text = self._decode_mqtt_payload(message).strip()
+        if not text:
+            return None
+
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+
+        if isinstance(data, (int, float)):
+            return int(data)
+        if isinstance(data, dict) and "epoch" in data:
+            try:
+                return int(data["epoch"])
+            except (TypeError, ValueError):
+                return None
+        if isinstance(data, str):
+            text = data.strip()
+
+        try:
+            return int(float(text))
+        except ValueError:
+            pass
+
+        return self._parse_iso8601_utc(text)
+
+    def _on_time_command(self, _client, _topic, message):
+        """Set the device RTC from an MQTT time payload (HA datetime or epoch)."""
+        epoch = self._parse_time_payload(message)
+        if epoch is None:
+            self._app.logger.error(
+                f"mqtt:time/set bad payload: {self._decode_mqtt_payload(message)}"
+            )
+            return
+
+        try:
+            self._app.rtc.datetime = time.localtime(epoch)
+        except OSError as error:
+            print("failed to set RTC from MQTT:", error)
+            return
+
+        print(f"mqtt:time/set epoch={epoch}")
+        self.publish_time_state(epoch)
+
+    def _on_publish_data_command(self, _client, _topic, _message):
+        """Home Assistant button: publish the full in-memory Data store."""
+        self.publish_data_store()
+
     def publish_display_state(self):
         """Publish retained display switch state for Home Assistant."""
         if not self.is_connected_to_broker():
             return
         payload = "ON" if self._app.display_enabled else "OFF"
         self._mqtt.publish(self._display_state_topic, payload, retain=True, qos=1)
+
+    def publish_time_state(self, epoch=None):
+        """Publish retained ISO 8601 UTC time for the Home Assistant datetime entity."""
+        if not self.is_connected_to_broker():
+            return
+        if epoch is None:
+            epoch = time.time()
+        payload = self._epoch_to_iso_utc(epoch)
+        self._mqtt.publish(self._time_state_topic, payload, retain=True, qos=1)
+
+    def publish_data_store(self):
+        """Publish the full Data store JSON to the data/state topic."""
+        if not self.is_connected_to_broker():
+            return
+        try:
+            payload = json.dumps(self._app.data.all())
+        except (TypeError, ValueError) as error:
+            print("mqtt:data/publish serialize failed:", error)
+            return
+        self._mqtt.publish(self._data_state_topic, payload, retain=True, qos=1)
+        print("mqtt: published full data store")
 
     def store_data(self, key, message):
         """
@@ -324,7 +481,7 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             "free_memory": gc.mem_free(),  # pylint: disable=no-member
             "flash_free": flash_free,
             "flash_size": flash_size,
-            "rtc": "ESP32"
+            "rtc": "software"
             if self._app.rtc.__class__.__name__ == "RTC"
             else self._app.rtc.__class__.__name__,
             "wifi_ssid": self._app.platform.wifi_ssid,
@@ -368,6 +525,8 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             if time.monotonic_ns() > self._next_diagnostic_time:
                 print("MQTT publishing diagnostics")
                 self._publish_diagnostics()
+                # keep the HA datetime entity aligned with NTP/RTC drift
+                self.publish_time_state()
                 self._next_diagnostic_time = time.monotonic_ns() + int(60e9)
 
             self._mqtt.loop(self._mqtt_loop_timeout)

@@ -45,7 +45,9 @@ class HomeAssistant:
         """Point discovery/publish at a new client after MQTT is rebuilt (e.g. WiFi restore)."""
         self._mqtt_client = mqtt_client
 
-    def create_autodiscovery_config(self):  # pylint: disable=too-many-locals
+    def create_autodiscovery_config(
+        self,
+    ):  # pylint: disable=too-many-locals,too-many-branches
         """Generate Home Assistant MQTT autodiscovery configuration"""
 
         device_info = {
@@ -177,7 +179,14 @@ class HomeAssistant:
                 "command_topic": f"{self._base_topic}/reboot",
                 "payload_press": "reboot",
                 "icon": "mdi:restart",
-            }
+            },
+            "publish_data": {
+                "name": "Publish Data Store",
+                "command_topic": f"{self._base_topic}/data/publish",
+                "payload_press": "publish",
+                "icon": "mdi:database-export",
+                "entity_category": "diagnostic",
+            },
         }
 
         switches = {
@@ -188,6 +197,16 @@ class HomeAssistant:
                 "payload_on": "ON",
                 "payload_off": "OFF",
                 "icon": "mdi:monitor",
+                "entity_category": "config",
+            }
+        }
+
+        datetimes = {
+            "device_time": {
+                "name": "Device Time",
+                "command_topic": f"{self._base_topic}/time/set",
+                "state_topic": f"{self._base_topic}/time/state",
+                "icon": "mdi:clock-edit",
                 "entity_category": "config",
             }
         }
@@ -282,6 +301,8 @@ class HomeAssistant:
                 "payload_not_available": "offline",
                 "device": {"identifiers": [self._device_id]},
             }
+            if "entity_category" in button_config:
+                payload["entity_category"] = button_config["entity_category"]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 
@@ -303,6 +324,25 @@ class HomeAssistant:
             }
             if "entity_category" in switch_config:
                 payload["entity_category"] = switch_config["entity_category"]
+
+            autodiscovery_messages.append({"topic": topic, "payload": payload})
+
+        for datetime_key, datetime_config in datetimes.items():
+            topic = f"homeassistant/datetime/{self._device_id}/{datetime_key}/config"
+
+            payload = {
+                "name": datetime_config["name"],
+                "command_topic": datetime_config["command_topic"],
+                "state_topic": datetime_config["state_topic"],
+                "icon": datetime_config["icon"],
+                "unique_id": f"{self._device_id}_{datetime_key}",
+                "availability_topic": self._availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "device": {"identifiers": [self._device_id]},
+            }
+            if "entity_category" in datetime_config:
+                payload["entity_category"] = datetime_config["entity_category"]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 
