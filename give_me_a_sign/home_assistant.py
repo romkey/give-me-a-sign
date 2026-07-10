@@ -47,7 +47,7 @@ class HomeAssistant:
 
     def create_autodiscovery_config(
         self,
-    ):  # pylint: disable=too-many-locals,too-many-branches
+    ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Generate Home Assistant MQTT autodiscovery configuration"""
 
         device_info = {
