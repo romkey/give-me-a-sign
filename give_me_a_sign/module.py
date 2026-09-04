@@ -208,6 +208,15 @@ class SignModule:  # pylint: disable=too-few-public-methods
     def loop(self):  # pylint: disable=no-self-use
         """Called repeatedly while this module's screen is on display."""
 
+    def background(self):  # pylint: disable=no-self-use
+        """
+        Periodic upkeep, run every pass whether or not this module is showing.
+
+        Use this for work that must not stop when the module is off screen —
+        clock NTP resync, for example. It must not draw: the module that owns
+        the display calls :meth:`show` or :meth:`loop` for that.
+        """
+
     def on_side_effect(self):
         """Called when SIDE_EFFECT_ONLY and new data arrives (e.g. tones)."""
 

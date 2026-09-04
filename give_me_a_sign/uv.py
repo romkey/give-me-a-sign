@@ -80,7 +80,8 @@ class UV(SignModule):
                 terminalio.FONT, color=0x800080, text=compact
             )
             line.x = 0
-            line.y = 0
+            # Label y is the text's vertical center, so center it in the slot.
+            line.y = EIGHTH[1] // 2
             group.append(line)
         return group
 

@@ -4,6 +4,7 @@
 
 """Unit tests for clock timezone and solar logic."""
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -175,3 +176,50 @@ def test_is_sundown_ha_next_event_day(clock):
 
 def test_is_sundown_without_solar(clock):
     assert clock.is_sundown is False
+
+
+def test_background_resyncs_ntp_when_due(clock, monkeypatch):
+    """
+    NTP upkeep must not live in loop(): loop() only runs while the clock slot
+    is on screen, and a rotation that never shows the clock would drift.
+    """
+    calls = []
+    clock._next_ntp_attempt = 0
+    monkeypatch.setattr(Clock, "_ntp_update", lambda self: calls.append("ntp"))
+
+    clock.background()
+    assert calls == ["ntp"]
+
+
+def test_background_waits_until_the_next_attempt(clock, monkeypatch):
+    calls = []
+    clock._next_ntp_attempt = time.monotonic_ns() + 10 * 1_000_000_000
+    monkeypatch.setattr(Clock, "_ntp_update", lambda self: calls.append("ntp"))
+
+    clock.background()
+    assert not calls
+
+
+def test_loop_still_resyncs_and_redraws(clock, monkeypatch):
+    calls = []
+    clock._next_ntp_attempt = 0
+    clock._last_update_time = None
+    monkeypatch.setattr(Clock, "_ntp_update", lambda self: calls.append("ntp"))
+    monkeypatch.setattr(Clock, "update_time", lambda self: calls.append("draw"))
+
+    clock.loop()
+    assert calls == ["ntp", "draw"]
+
+
+def test_background_does_not_draw(clock, monkeypatch):
+    """background() runs for every module every pass; drawing would fight
+    whichever module actually owns the display."""
+    clock._next_ntp_attempt = 0
+    monkeypatch.setattr(Clock, "_ntp_update", lambda self: None)
+    monkeypatch.setattr(
+        Clock,
+        "update_time",
+        lambda self: pytest.fail("background() must not draw"),
+    )
+
+    clock.background()

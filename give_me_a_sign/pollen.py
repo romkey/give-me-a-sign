@@ -27,6 +27,12 @@ _GRASS_Y = 24
 _TREE_ICON_Y = 0
 _GRASS_ICON_Y = 16
 
+# Label y is the vertical center of the text, so half/eighth slots center on
+# half their height rather than sitting at the top edge.
+_HALF_TEXT_Y = HALF_WIDE[1] // 2
+_HALF_COLUMN_X = HALF_WIDE[0] // 2
+_EIGHTH_TEXT_Y = EIGHTH[1] // 2
+
 _TREE_PIXELS = (
     "..22..",
     ".2222.",
@@ -91,18 +97,26 @@ class Pollen(SignModule):
                 )
             Clock.append_mini_clock(self._app, group)
         elif layout == "half":
+            # Two side-by-side columns in a 64x16 slot, not two stacked rows.
             if tree is not None:
-                self._append_row(group, self._tree_icon, tree, 0, 8)
+                self._append_row(group, self._tree_icon, tree, 0, _HALF_TEXT_Y)
             if grass is not None:
-                self._append_row(group, self._grass_icon, grass, 32, 8)
+                self._append_row(
+                    group,
+                    self._grass_icon,
+                    grass,
+                    0,
+                    _HALF_TEXT_Y,
+                    x_offset=_HALF_COLUMN_X,
+                )
         elif layout == "tree":
             if tree is None:
                 return None
-            self._append_row(group, self._tree_icon, tree, 0, 0)
+            self._append_row(group, self._tree_icon, tree, 0, _EIGHTH_TEXT_Y)
         elif layout == "grass":
             if grass is None:
                 return None
-            self._append_row(group, self._grass_icon, grass, 0, 0)
+            self._append_row(group, self._grass_icon, grass, 0, _EIGHTH_TEXT_Y)
         return group
 
     @staticmethod
@@ -138,15 +152,18 @@ class Pollen(SignModule):
         return displayio.TileGrid(bitmap, pixel_shader=palette)
 
     @staticmethod
-    def _append_row(group, icon, count, icon_y, text_y):
+    def _append_row(  # pylint: disable=too-many-arguments
+        group, icon, count, icon_y, text_y, x_offset=0
+    ):
+        """Draw one icon-and-count row. *text_y* is the label's vertical center."""
         row_icon = displayio.TileGrid(icon.bitmap, pixel_shader=icon.pixel_shader)
-        row_icon.x = _ICON_X
+        row_icon.x = _ICON_X + x_offset
         row_icon.y = icon_y
         group.append(row_icon)
         label = adafruit_display_text.label.Label(
             terminalio.FONT, color=_TEXT_COLOR, text=str(count)
         )
-        label.x = _TEXT_X
+        label.x = _TEXT_X + x_offset
         label.y = text_y
         group.append(label)
 

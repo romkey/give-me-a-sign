@@ -115,10 +115,14 @@ class Clock(SignModule):
         self.update_time()
         return True
 
-    def loop(self):
+    def background(self):
+        """Resync NTP on schedule, whether or not the clock is on screen."""
         if time.monotonic_ns() >= self._next_ntp_attempt:
             print("NTP update")
             self._ntp_update()
+
+    def loop(self):
+        self.background()
 
         if (
             self._last_update_time is None
@@ -310,7 +314,8 @@ class Clock(SignModule):
         group = displayio.Group()
         label = self.mini_clock()
         label.x = 0
-        label.y = 0
+        # Label y is the text's vertical center, so center it in the slot.
+        label.y = EIGHTH[1] // 2
         group.append(label)
         return group
 

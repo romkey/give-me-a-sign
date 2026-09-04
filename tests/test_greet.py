@@ -61,3 +61,34 @@ def test_greet_non_string_person(greeter):
     greet, _ = greeter
     _publish_greet(greet, {"person": 5})
     assert greet.show() is False
+
+
+def test_greet_shows_once_per_greeting(greeter):
+    greet, _ = greeter
+    _publish_greet(greet, {"person": "John R."})
+    assert greet.show() is True
+    assert greet.show() is False
+
+
+def test_greet_complication_renders_after_the_interrupt(greeter):
+    """
+    show() consumes the updated flag for the interrupt. The greet.full
+    complication reuses _build_group, so it must still paint the stored
+    greeting on a composed screen afterwards.
+    """
+    greet, _ = greeter
+    _publish_greet(greet, {"person": "John R."})
+    assert greet.show() is True
+
+    full = greet.complications()[0]
+    assert full.name == "full"
+
+    group = full.render()
+    assert group is not None
+    assert group[0].text == "Welcome"
+    assert group[1].text == "John"
+
+
+def test_greet_complication_without_data(greeter):
+    greet, _ = greeter
+    assert greet.complications()[0].render() is None

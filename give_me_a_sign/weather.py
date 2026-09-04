@@ -268,7 +268,8 @@ class Weather(SignModule):
                 text=f"{temperature}F",
             )
             temp_text.x = 0
-            temp_text.y = 0
+            # Label y is the text's vertical center, so center it in the slot.
+            temp_text.y = EIGHTH[1] // 2
             group.append(temp_text)
         elif layout == "humidity8":
             label = adafruit_display_text.label.Label(
@@ -277,7 +278,8 @@ class Weather(SignModule):
                 text=f"{humidity}%",
             )
             label.x = 0
-            label.y = 0
+            # Label y is the text's vertical center, so center it in the slot.
+            label.y = EIGHTH[1] // 2
             group.append(label)
 
         return group
