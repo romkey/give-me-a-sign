@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from give_me_a_sign.clock import Clock
-from give_me_a_sign.data import Data
+from give_me_a_sign.module import ModuleStore
 
 
 class _Logger:
@@ -25,13 +25,13 @@ class _Logger:
 
 @pytest.fixture
 def clock(monkeypatch):
-    monkeypatch.setattr(Data, "_restore", lambda self: False)
+    monkeypatch.setattr(ModuleStore, "_restore", lambda self: False)
     app = SimpleNamespace()
-    app.data = Data()
     app.logger = _Logger()
 
     instance = Clock.__new__(Clock)
     instance._app = app
+    instance.store = ModuleStore(Clock.ENDPOINTS, persistent_keys=Clock.PERSISTENT_KEYS)
     instance._timezone_breaks = None
     instance._timezone_cache_until = 0
     instance._timezone_cached_offset = 0
@@ -40,7 +40,7 @@ def clock(monkeypatch):
 
 
 def _set_solar(clock, now, sunrise_delta, sunset_delta):
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_SOLAR,
         {
             "sunrise": now + sunrise_delta,
@@ -53,7 +53,7 @@ def test_timezone_offset_selects_latest_transition(clock, monkeypatch):
     now = 1_700_000_000
     monkeypatch.setattr("give_me_a_sign.clock.time.time", lambda: now)
 
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_TIMEZONE,
         {
             "timezone": "America/Los_Angeles",
@@ -63,7 +63,7 @@ def test_timezone_offset_selects_latest_transition(clock, monkeypatch):
             ],
         },
     )
-    clock._app.data._data[Clock.KEY_TIMEZONE][Data.KEY_UPDATED] = True
+    clock.store._data[Clock.KEY_TIMEZONE][ModuleStore.KEY_UPDATED] = True
 
     clock._check_timezone_offset()
     assert clock.timezone_offset == -28800
@@ -76,14 +76,14 @@ def test_timezone_update_invalidates_cache(clock, monkeypatch):
 
     clock._timezone_cache_until = now + 99999
     clock._timezone_cached_offset = 123
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_TIMEZONE,
         {
             "timezone": "UTC",
             "transitions": [{"timestamp": now - 60, "offset": 0}],
         },
     )
-    clock._app.data._data[Clock.KEY_TIMEZONE][Data.KEY_UPDATED] = True
+    clock.store._data[Clock.KEY_TIMEZONE][ModuleStore.KEY_UPDATED] = True
 
     clock._check_timezone_offset()
     assert clock.timezone_offset == 0
@@ -93,11 +93,11 @@ def test_timezone_empty_transitions(clock, monkeypatch):
     now = 1_700_000_000
     monkeypatch.setattr("give_me_a_sign.clock.time.time", lambda: now)
 
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_TIMEZONE,
         {"timezone": "UTC", "transitions": []},
     )
-    clock._app.data._data[Clock.KEY_TIMEZONE][Data.KEY_UPDATED] = True
+    clock.store._data[Clock.KEY_TIMEZONE][ModuleStore.KEY_UPDATED] = True
 
     clock._check_timezone_offset()
     assert clock.timezone_offset == 0
@@ -108,7 +108,7 @@ def test_calculate_color_no_solar(clock):
 
 
 def test_calculate_color_missing_keys(clock):
-    clock._app.data.set_item(Clock.KEY_SOLAR, {"sunrise": 1})
+    clock.store.set_item(Clock.KEY_SOLAR, {"sunrise": 1})
     assert clock._calculate_color(1_700_000_000) == Clock.NO_SOLAR_COLOR
     assert clock._app.logger.errors
 
@@ -139,7 +139,7 @@ def test_calculate_color_pre_sunrise(clock):
 
 def test_calculate_color_ha_next_event_day(clock):
     now = 1_700_000_000
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_SOLAR,
         {
             "sunrise": now + 20 * 3600,
@@ -163,7 +163,7 @@ def test_is_sundown_night_normal_order(clock):
 
 def test_is_sundown_ha_next_event_day(clock):
     now = 1_700_000_000
-    clock._app.data.set_item(
+    clock.store.set_item(
         Clock.KEY_SOLAR,
         {
             "sunrise": now + 28 * 3600,

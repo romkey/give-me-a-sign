@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/data - data storage for LED Matrix display
-====================================================
+=========================================================
 
 * Author: John Romkey
 """

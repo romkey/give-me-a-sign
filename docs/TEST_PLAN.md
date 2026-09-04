@@ -26,18 +26,14 @@ display and/or the sign's published topics."
 
 ### Level 1 — Host unit tests (pytest, CI-runnable)
 
-The only current test is `tests/test_smoke.py` (`assert True`). CI
-(`.github/workflows/build.yml`) runs pre-commit, pytest, and a bundle build.
+CI (`.github/workflows/build.yml`) runs pre-commit, pytest, and a bundle build.
+The suite includes module registry, config loading, complication composition,
+MQTT dispatch, and per-module logic tests under `tests/test_*.py` with stubs in
+`tests/stubs/`.
 
-Most modules import `board`, `displayio`, `pwmio`, `wifi`, or `rtc` at module
-level, so they cannot be imported under host CPython directly. Two paths to
-real unit coverage:
-
-- **Directly testable today** (no hardware imports, or trivially isolated):
-  - `give_me_a_sign/data.py` — imports only `time`, `gc`, `json`, `storage`.
-    `storage` needs a stub (it is only used in `_save`/`_restore`).
-  - `give_me_a_sign/mqtt.py` static helpers — `SignMQTT._decode_mqtt_payload`
-    and the plain-text fallback logic in `store_data` (needs light stubbing).
+Most display modules import `board`, `displayio`, `pwmio`, or similar at module
+level. Tests use stubs and `Class.__new__` fixtures where full `__init__` would
+pull in hardware.
   - Pure static methods: `Weather._image_stem`, `Weather._temp_color`,
     `Weather._forecast_text`, `AQI._aqi_color`.
 - **Testable with a `board`/`displayio`/`terminalio` stub package** (add a
@@ -160,6 +156,11 @@ availability. See section 5.
 `CIRCUITPY_WIFI_*`), `MQTT_BROKER`, `MQTT_PORT`, `MQTT_SSL`,
 `MQTT_USERNAME`/`MQTT_PASSWORD`, `MQTT_TOPIC_PREFIX` (default
 `givemeasign`), and `anonymous_greetings` for the greet tests.
+
+Optional `/config.json` on CIRCUITPY (see `examples/config.json`) controls
+which modules appear in rotation, their durations, and composed screens built
+from complications. With no file present, the default rotation matches the
+legacy order: clock → weather → aqi → uv → pollen.
 
 **Finding the sign's topics** — per-device topics embed the WiFi MAC address
 with `:` replaced by `_`. Easiest way to discover it:

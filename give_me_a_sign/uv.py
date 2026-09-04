@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/uv - uv index module for LED Matrix display
-====================================================
+==========================================================
 
 * Author: John Romkey
 """
@@ -13,75 +13,99 @@ import displayio
 import terminalio
 import adafruit_display_text.label
 
+from .clock import Clock
+from .complication import EIGHTH, FULL, QUARTER, Complication
+from .module import SignModule
 
-class UV:
+
+class UV(SignModule):
     """
     Manages the display of UV Index on the sign.
-
-    The server receives UV Index values and stashes them in the Data store under the key "uv".
-    This class retrieves a message and displays it.
-
-    UV Index has just the index value
     """
 
+    NAME = "uv"
     KEY = "uv"
+    ENDPOINTS = (KEY,)
+    STALE_SECONDS = 60 * 60
 
     def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
+        super().__init__(app)
+        self._complications = None
 
-        self._app = app
-
-    def show(self, mini_clock) -> bool:
-        """
-        Display the UV Index on the screen
-
-        The server receives index and stashes it in the Data store under the key "uv".
-        This class retrieves index and displays it.
-
-        Data structure should look like:
-
-        .. code-block:: python
-           { "index": integer }
-        """
-
-        uvi = self._app.data.get_item(UV.KEY)
-        self._app.data.clear_updated(UV.KEY)
-
+    def _index(self):
+        uvi = self.store.get_item(UV.KEY)
+        if uvi is None:
+            return None
         try:
             index = float(uvi["index"])
         except (TypeError, KeyError, ValueError):
-            return False
-
+            return None
         if index == 0:
+            return None
+        return index
+
+    def should_show(self) -> bool:
+        if not super().should_show():
             return False
+        clock = self._app.modules.get("clock")
+        if clock is not None and clock.is_sundown:
+            return False
+        return self._index() is not None
 
-        line = adafruit_display_text.label.Label(
-            terminalio.FONT,
-            color=0x800080,
-            text="UVI " + str(int(index * 10) / 10.0),
-        )
+    def _build_group(self, layout):
+        index = self._index()
+        if index is None:
+            return None
 
-        line.x = 0
-        line.y = 12
-
+        text = "UVI " + str(int(index * 10) / 10.0)
         group = displayio.Group()
-        group.append(line)
+        if layout == "full":
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=0x800080, text=text
+            )
+            line.x = 0
+            line.y = 12
+            group.append(line)
+            Clock.append_mini_clock(self._app, group)
+        elif layout == "quarter":
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=0x800080, text=text
+            )
+            line.x = 0
+            line.y = 8
+            group.append(line)
+        elif layout == "eighth":
+            compact = "UV" + str(int(index * 10) / 10.0)
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=0x800080, text=compact
+            )
+            line.x = 0
+            line.y = 0
+            group.append(line)
+        return group
 
-        mini_clock_width = mini_clock.bounding_box[2]
-        mini_clock.x = self._app.canvas_width - mini_clock_width
-        mini_clock.y = 2
-        group.append(mini_clock)
-
+    def show(self) -> bool:
+        self.store.clear_updated(UV.KEY)
+        group = self._build_group("full")
+        if group is None:
+            return False
         self._app.show_group(group)
-
         return True
 
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
-
-        return
+    def complications(self):
+        if self._complications is None:
+            self._complications = [
+                Complication(
+                    "full", FULL[0], FULL[1], lambda: self._build_group("full")
+                ),
+                Complication(
+                    "quarter",
+                    QUARTER[0],
+                    QUARTER[1],
+                    lambda: self._build_group("quarter"),
+                ),
+                Complication(
+                    "eighth", EIGHTH[0], EIGHTH[1], lambda: self._build_group("eighth")
+                ),
+            ]
+        return self._complications

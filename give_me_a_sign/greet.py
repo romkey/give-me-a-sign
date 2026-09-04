@@ -4,68 +4,69 @@
 
 """
 give-me-a-sign/greet - greeter module for LED Matrix display
-====================================================
+============================================================
 
 * Author: John Romkey
 """
 
+import json
 import os
 import adafruit_display_text.label
 import displayio
 import terminalio
 
+from .complication import FULL, Complication
+from .module import SignModule
 
-class Greet:
+
+class Greet(SignModule):
     """
     Displays a greeting when notified that someone has entered the space.
-
-    The server receives a greeting message and stashes it in the Data store under the key "greet".
-    This class retrieves information and displays greets the person.
-
-    Greetings have structured
     """
 
+    NAME = "greet"
     KEY = "greet"
+    ENDPOINTS = (KEY,)
+    IS_INTERRUPT = True
+    DEFAULT_DURATION = 15
+    ACTIVE_RENDER = "once"
 
     def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
-        self._app = app
+        super().__init__(app)
+        self._complications = None
 
-    def show(self) -> bool:
-        """
-        Display the current greeting if valid.
+    def normalize_payload(self, endpoint, raw):  # pylint: disable=unused-argument
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            data = None
+        if not isinstance(data, dict):
+            text = raw if data is None else data
+            if not isinstance(text, str):
+                text = str(text)
+            return {"person": text}
+        return data
 
-        Greetings are stored in Data under the key "greet"
-
-        Data structure should look like:
-
-        .. code-block:: python
-           { "person": string,
-              "door": string
-            }
-
-        The person's name should be in the format "John R.", giving only the
-        last initial and not the full name.
-        """
-        if not self._app.data.is_updated(Greet.KEY):
-            print("not updated")
+    def wants_interrupt(self) -> bool:
+        if not self.store.is_updated(Greet.KEY):
             return False
+        return True
 
-        self._app.data.clear_updated(Greet.KEY)
+    def _build_group(self):
+        if not self.store.is_updated(Greet.KEY):
+            return None
+
+        self.store.clear_updated(Greet.KEY)
 
         try:
-            person = self._app.data.get_item(Greet.KEY)["person"]
+            person = self.store.get_item(Greet.KEY)["person"]
         except (KeyError, TypeError):
-            return False
+            return None
 
         if not isinstance(person, str):
-            return False
+            return None
 
-        # only use their first name
         names = person.split(" ")
-
         greet_msg = "Welcome"
 
         anonymize = os.getenv("anonymous_greetings")
@@ -88,14 +89,31 @@ class Greet:
         group = displayio.Group()
         group.append(line1)
         group.append(line2)
-        self._app.show_group(group)
+        return group
 
+    def show(self) -> bool:
+        group = self._build_group()
+        if group is None:
+            return False
+        self._app.show_group(group)
         return True
 
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
+    def ha_entities(self):
+        return [
+            {
+                "component": "text",
+                "key": "greet",
+                "config": {
+                    "name": "Greeting Text",
+                    "endpoint": Greet.KEY,
+                    "icon": "mdi:hand-wave",
+                },
+            }
+        ]
 
-        return
+    def complications(self):
+        if self._complications is None:
+            self._complications = [
+                Complication("full", FULL[0], FULL[1], self._build_group),
+            ]
+        return self._complications

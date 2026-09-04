@@ -10,8 +10,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from give_me_a_sign.data import Data
+from give_me_a_sign.aqi import AQI
+from give_me_a_sign.greet import Greet
+from give_me_a_sign.message import Message
+from give_me_a_sign.module import ModuleStore
 from give_me_a_sign.mqtt import SignMQTT
+from give_me_a_sign.registry import ModuleRegistry
+from give_me_a_sign.uv import UV
 
 
 class _Logger:
@@ -46,14 +51,18 @@ class _RecordingMQTT:
 
 @pytest.fixture
 def sign_mqtt(monkeypatch):
-    monkeypatch.setattr(Data, "_restore", lambda self: False)
-    mqtt = SignMQTT.__new__(SignMQTT)
-    mqtt._app = SimpleNamespace(
-        data=Data(),
+    monkeypatch.setattr(ModuleStore, "_restore", lambda self: False)
+    app = SimpleNamespace(
         logger=_Logger(),
         rtc=_FakeRTC(),
         display_enabled=True,
     )
+    app.modules = ModuleRegistry(app)
+    app.modules.register(AQI(app))
+    app.modules.register(Message(app))
+    app.modules.register(UV(app))
+    mqtt = SignMQTT.__new__(SignMQTT)
+    mqtt._app = app
     mqtt._mqtt = _RecordingMQTT()
     mqtt._ha_sign_base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
     mqtt._time_state_topic = f"{mqtt._ha_sign_base}/time/state"
@@ -168,8 +177,8 @@ def test_on_time_command_rtc_oserror(sign_mqtt):
 
 
 def test_publish_data_store(sign_mqtt):
-    sign_mqtt._app.data.set_item("aqi", {"aqi": 58})
-    sign_mqtt._app.data.set_item("message", {"text": "hi"})
+    sign_mqtt._app.modules.get("aqi").store.set_item("aqi", {"aqi": 58})
+    sign_mqtt._app.modules.get("message").store.set_item("message", {"text": "hi"})
 
     sign_mqtt.publish_data_store()
 
@@ -187,7 +196,7 @@ def test_publish_data_store(sign_mqtt):
 
 
 def test_on_publish_data_command(sign_mqtt):
-    sign_mqtt._app.data.set_item("uv", {"index": 5})
+    sign_mqtt._app.modules.get("uv").store.set_item("uv", {"index": 5})
     sign_mqtt._on_publish_data_command(None, "topic", "publish")
 
     assert len(sign_mqtt._mqtt.published) == 1
@@ -196,6 +205,6 @@ def test_on_publish_data_command(sign_mqtt):
 
 def test_publish_data_store_skips_when_disconnected(sign_mqtt):
     sign_mqtt._mqtt._connected = False
-    sign_mqtt._app.data.set_item("aqi", {"aqi": 1})
+    sign_mqtt._app.modules.get("aqi").store.set_item("aqi", {"aqi": 1})
     sign_mqtt.publish_data_store()
     assert sign_mqtt._mqtt.published == []

@@ -4,7 +4,7 @@
 
 """
 give_me_a_sign.home_assistant — Home Assistant MQTT autodiscovery
-====================================================
+=================================================================
 
 * Author: John Romkey
 """
@@ -34,6 +34,7 @@ class HomeAssistant:
         self._name = "GiveMeASign - " + os.getenv("SIGN_NAME", mac_address)
         self._mac_address = mac_address
         self._mqtt_client = mqtt_client
+        self._modules = None
         mac_clean = mac_address.replace(":", "_")
         self._device_id = f"givemeasign_{mac_clean}"
         self._base_topic = base_topic
@@ -44,6 +45,27 @@ class HomeAssistant:
     def set_mqtt_client(self, mqtt_client):
         """Point discovery/publish at a new client after MQTT is rebuilt (e.g. WiFi restore)."""
         self._mqtt_client = mqtt_client
+
+    def set_modules(self, modules):
+        """Provide the module registry for collecting HA entity descriptors."""
+        self._modules = modules
+
+    def _text_entities(self):
+        entities = {}
+        if self._modules is None:
+            return entities
+        for module in self._modules.modules():
+            for descriptor in module.ha_entities():
+                if descriptor.get("component") != "text":
+                    continue
+                key = descriptor["key"]
+                config = descriptor["config"]
+                entities[key] = {
+                    "name": config["name"],
+                    "command_topic": f"{self._base_topic}/module/{config['endpoint']}",
+                    "icon": config.get("icon", "mdi:text"),
+                }
+        return entities
 
     def create_autodiscovery_config(
         self,
@@ -164,18 +186,7 @@ class HomeAssistant:
             },
         }
 
-        text_inputs = {
-            "greet": {
-                "name": "Greeting Text",
-                "command_topic": f"{self._base_topic}/module/greet",
-                "icon": "mdi:hand-wave",
-            },
-            "message": {
-                "name": "Message Text",
-                "command_topic": f"{self._base_topic}/module/message",
-                "icon": "mdi:message-text",
-            },
-        }
+        text_inputs = self._text_entities()
 
         buttons = {
             "reboot": {
