@@ -1,0 +1,22 @@
+{
+  "modules": [],
+  "rotation": [
+    {"module": "clock", "duration": 20},
+    {"module": "weather", "duration": 10},
+    {"module": "aqi", "duration": 10},
+    {"module": "uv", "duration": 10},
+    {"module": "pollen", "duration": 10},
+    {
+      "screen": {
+        "name": "combo",
+        "duration": 10,
+        "complications": [
+          {"ref": "clock.mini", "x": 32, "y": 0},
+          {"ref": "aqi.eighth", "x": 0, "y": 0},
+          {"ref": "pollen.tree", "x": 0, "y": 8},
+          {"ref": "pollen.grass", "x": 32, "y": 8}
+        ]
+      }
+    }
+  ]
+}

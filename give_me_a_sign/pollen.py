@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/pollen - pollen count module for LED Matrix display
-====================================================
+==================================================================
 
 * Author: John Romkey
 """
@@ -12,6 +12,10 @@ give-me-a-sign/pollen - pollen count module for LED Matrix display
 import adafruit_display_text.label
 import displayio
 import terminalio
+
+from .clock import Clock
+from .complication import EIGHTH, FULL, HALF_WIDE, Complication
+from .module import SignModule
 
 _BROWN = 0xA52A2A
 _GREEN = 0x00FF00
@@ -42,86 +46,78 @@ _GRASS_PIXELS = (
 )
 
 
-class Pollen:
+class Pollen(SignModule):
     """
     Manages the display of Pollen Count on the sign.
-
-    The server receives Pollen Count values and stashes them in the Data store
-    under the key "pollen". This class retrieves the counts and displays them.
-
-    Tree and grass counts are shown on separate lines with a small icon for each.
     """
 
+    NAME = "pollen"
     KEY = "pollen"
+    ENDPOINTS = (KEY,)
+    STALE_SECONDS = 60 * 60
 
     def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
-
-        self._app = app
+        super().__init__(app)
         self._tree_icon = Pollen._make_icon(_TREE_PIXELS, (_BROWN, _GREEN))
         self._grass_icon = Pollen._make_icon(_GRASS_PIXELS, (_GREEN,))
+        self._complications = None
 
-    def show(self, mini_clock) -> bool:
-        """
-        Display pollen counts on the screen.
-
-        The server stashes counts in the Data store under the key "pollen".
-        This class retrieves them and displays tree and grass on separate lines.
-
-        Data structure should look like:
-
-        .. code-block:: python
-           { "tree": integer, "grass": integer }
-
-        Either key may be omitted; the screen is shown when at least one count
-        is present.
-        """
-
-        pollen = self._app.data.get_item(Pollen.KEY)
+    def _counts(self):
+        pollen = self.store.get_item(Pollen.KEY)
         if pollen is None:
+            return None, None
+        return Pollen._parse_counts(pollen)
+
+    def show(self) -> bool:
+        self.store.clear_updated(Pollen.KEY)
+        group = self._build_group("full")
+        if group is None:
             return False
+        self._app.show_group(group)
+        return True
 
-        self._app.data.clear_updated(Pollen.KEY)
-
-        tree, grass = Pollen._parse_counts(pollen)
+    def _build_group(self, layout):
+        tree, grass = self._counts()
         if tree is None and grass is None:
-            return False
+            return None
 
         group = displayio.Group()
-
-        if tree is not None:
-            self._append_row(group, self._tree_icon, tree, _TREE_ICON_Y, _TREE_Y)
-
-        if grass is not None:
-            self._append_row(group, self._grass_icon, grass, _GRASS_ICON_Y, _GRASS_Y)
-
-        mini_clock_width = mini_clock.bounding_box[2]
-        mini_clock.x = self._app.canvas_width - mini_clock_width
-        mini_clock.y = 2
-        group.append(mini_clock)
-
-        self._app.show_group(group)
-
-        return True
+        if layout == "full":
+            if tree is not None:
+                self._append_row(group, self._tree_icon, tree, _TREE_ICON_Y, _TREE_Y)
+            if grass is not None:
+                self._append_row(
+                    group, self._grass_icon, grass, _GRASS_ICON_Y, _GRASS_Y
+                )
+            Clock.append_mini_clock(self._app, group)
+        elif layout == "half":
+            if tree is not None:
+                self._append_row(group, self._tree_icon, tree, 0, 8)
+            if grass is not None:
+                self._append_row(group, self._grass_icon, grass, 32, 8)
+        elif layout == "tree":
+            if tree is None:
+                return None
+            self._append_row(group, self._tree_icon, tree, 0, 0)
+        elif layout == "grass":
+            if grass is None:
+                return None
+            self._append_row(group, self._grass_icon, grass, 0, 0)
+        return group
 
     @staticmethod
     def _parse_counts(pollen):
         tree = grass = None
-
         if "tree" in pollen:
             try:
                 tree = int(pollen["tree"])
             except (TypeError, ValueError):
                 tree = None
-
         if "grass" in pollen:
             try:
                 grass = int(pollen["grass"])
             except (TypeError, ValueError):
                 grass = None
-
         return tree, grass
 
     @staticmethod
@@ -147,7 +143,6 @@ class Pollen:
         row_icon.x = _ICON_X
         row_icon.y = icon_y
         group.append(row_icon)
-
         label = adafruit_display_text.label.Label(
             terminalio.FONT, color=_TEXT_COLOR, text=str(count)
         )
@@ -155,10 +150,23 @@ class Pollen:
         label.y = text_y
         group.append(label)
 
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
-
-        return
+    def complications(self):
+        if self._complications is None:
+            self._complications = [
+                Complication(
+                    "full", FULL[0], FULL[1], lambda: self._build_group("full")
+                ),
+                Complication(
+                    "half",
+                    HALF_WIDE[0],
+                    HALF_WIDE[1],
+                    lambda: self._build_group("half"),
+                ),
+                Complication(
+                    "tree", EIGHTH[0], EIGHTH[1], lambda: self._build_group("tree")
+                ),
+                Complication(
+                    "grass", EIGHTH[0], EIGHTH[1], lambda: self._build_group("grass")
+                ),
+            ]
+        return self._complications

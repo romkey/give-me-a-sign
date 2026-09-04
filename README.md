@@ -6,6 +6,15 @@ SPDX-License-Identifier: MIT
 
 # Give Me A Sign!
 
+[![Build CI](https://github.com/romkey/give-me-a-sign/actions/workflows/build.yml/badge.svg)](https://github.com/romkey/give-me-a-sign/actions/workflows/build.yml)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Documentation Status](https://readthedocs.org/projects/give-me-a-sign/badge/?version=latest)](https://give-me-a-sign.readthedocs.io/en/latest/?badge=latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CircuitPython](https://img.shields.io/badge/CircuitPython-9.x%20%7C%2010.x-informational.svg)](https://circuitpython.org/)
+[![PyPI](https://img.shields.io/pypi/v/circuitpython-give-me-a-sign.svg)](https://pypi.org/project/circuitpython-give-me-a-sign/)
+
+Documentation: <https://give-me-a-sign.readthedocs.io/>
+
 Give Me A Sign! is an info sign designed for hacker and makerspaces,
 although you could use it in your home or office as well.
 
@@ -214,6 +223,63 @@ circup install -r requirements-circuitpython.txt ./give_me_a_sign --py --upgrade
 
 3. Copy `examples/code.py` to the root of `CIRCUITPY` (or merge into your own
    `code.py`), and add `settings.toml` / environment as needed.
+4. Optionally copy `examples/config.json` to `/config.json` on `CIRCUITPY` to
+   customize which modules rotate and for how long.
+
+## Modules
+
+Give Me A Sign uses a **module registry**. Each module:
+
+- Declares the MQTT `ENDPOINTS` it listens to
+- Owns a private data store (`ModuleStore`)
+- Renders its own screens via `show()` / `loop()`
+- May declare Home Assistant entities via `ha_entities()`
+- May publish **complications** (fractional screen layouts) for composed screens
+
+Built-in modules: `clock`, `weather`, `aqi`, `uv`, `pollen`, `greet`, `message`,
+`image`, `tones`, and store-only endpoints (`debug`, `lunar`).
+
+### External modules
+
+Copy a package named `gmas_*` into `CIRCUITPY/lib/` (for example
+`lib/gmas_example/` from `examples/gmas_example/`). The package must export:
+
+```python
+MODULES = [YourModuleClass]
+```
+
+Each class subclasses `SignModule` from `give_me_a_sign.module`. You can also
+list extra import names in `/config.json` under `"modules"`.
+
+### Configuration (`/config.json`)
+
+If `/config.json` is missing, the sign shows the default rotation:
+clock (20s) → weather (10s) → aqi (10s) → uv (10s) → pollen (10s).
+
+Example:
+
+```json
+{
+  "modules": ["gmas_stocks"],
+  "rotation": [
+    {"module": "clock", "duration": 20},
+    {"screen": {
+      "name": "combo",
+      "duration": 10,
+      "complications": [
+        {"ref": "clock.mini", "x": 32, "y": 0},
+        {"ref": "aqi.eighth", "x": 0, "y": 0}
+      ]
+    }}
+  ]
+}
+```
+
+Complication refs use the form `module_name.complication_name`. Slot sizes on the
+64×32 canvas: full (64×32), half-wide (64×16), half-tall (32×32), quarter
+(32×16), eighth (32×8).
+
+See `examples/config.json` for a full example.
 
 ## API
 
@@ -235,7 +301,7 @@ Per-device command topics (under `{prefix}/sign/{mac}/`):
 | `reboot` | any | MCU reset |
 | `display/set` | `ON` / `OFF` | Blank or show the matrix |
 | `time/set` | ISO 8601 UTC, epoch, or `{"epoch": …}` | Set the device RTC |
-| `data/publish` | any | Publish the full Data store to `data/state` |
+| `data/publish` | any | Publish all module data stores to `data/state` |
 
 Home Assistant autodiscovery is built in when MQTT is configured. See
 `give_me_a_sign/home_assistant.py` for entity definitions.

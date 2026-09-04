@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/aqi - air quality index module for LED Matrix display
-====================================================
+====================================================================
 
 * Author: John Romkey
 """
@@ -13,91 +13,74 @@ import adafruit_display_text.label
 import displayio
 import terminalio
 
+from .clock import Clock
+from .complication import EIGHTH, FULL, QUARTER, Complication
+from .module import SignModule
 
-class AQI:
+
+class AQI(SignModule):
     """
     Manages the display of Air Quality Index on the sign.
-
-    The server receives Air Quality Index values and stashes them
-    in the Data store under the key "aqi".
-
-    This class retrieves a message and displays it.
-
-    Air Quality Index has just the index value
     """
 
+    NAME = "aqi"
     KEY = "aqi"
+    ENDPOINTS = (KEY,)
+    STALE_SECONDS = 60 * 60
 
     def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
+        super().__init__(app)
+        self._complications = None
 
-        self._app = app
-
-    def show(self, mini_clock) -> bool:
-        """
-        Display the Air Quality Index on the screen
-
-        The server receives index and stashes it in the Data store under the key "aqi".
-        This class retrieves index and displays it.
-
-        Data structure should look like:
-
-        .. code-block:: python
-           { "index": integer }
-        """
-        aqi = self._app.data.get_item(AQI.KEY)
+    def _index(self):
+        aqi = self.store.get_item(AQI.KEY)
         if aqi is None:
-            return False
-
-        self._app.data.clear_updated(AQI.KEY)
-
+            return None
         try:
-            index = int(aqi["aqi"])
+            return int(aqi["aqi"])
         except (KeyError, TypeError, ValueError):
-            return False
+            return None
 
-        line = adafruit_display_text.label.Label(
-            terminalio.FONT, color=AQI._aqi_color(index), text="AQI " + str(index)
-        )
-        line.x = 0
-        line.y = 12
+    def _build_group(self, layout):
+        index = self._index()
+        if index is None:
+            return None
 
         group = displayio.Group()
-        group.append(line)
+        if layout == "full":
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=AQI._aqi_color(index), text="AQI " + str(index)
+            )
+            line.x = 0
+            line.y = 12
+            group.append(line)
+            Clock.append_mini_clock(self._app, group)
+        elif layout == "quarter":
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=AQI._aqi_color(index), text="AQI " + str(index)
+            )
+            line.x = 0
+            line.y = 8
+            group.append(line)
+        elif layout == "eighth":
+            line = adafruit_display_text.label.Label(
+                terminalio.FONT, color=AQI._aqi_color(index), text="AQI" + str(index)
+            )
+            line.x = 0
+            line.y = 0
+            group.append(line)
+        return group
 
-        mini_clock_width = mini_clock.bounding_box[2]
-        mini_clock.x = self._app.canvas_width - mini_clock_width
-        mini_clock.y = 2
-        group.append(mini_clock)
-
+    def show(self) -> bool:
+        self.store.clear_updated(AQI.KEY)
+        group = self._build_group("full")
+        if group is None:
+            return False
         self._app.show_group(group)
-
         return True
-
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
-
-        return
 
     @staticmethod
     def _aqi_color(aqi) -> int:
-        """
-        Returns the color associated with a particular Air Quality Index
-
-        0 to 50 - green
-        51 to 100 - yellow
-        101 to 150 - orange
-        151 to 200 - red
-        201 to 300 - purple
-        301 and up - maroon
-
-        source: https://www.airnow.gov/aqi/aqi-basics/
-        """
         if aqi > 300:
             return 0x800000
         if aqi > 200:
@@ -108,5 +91,22 @@ class AQI:
             return 0xFFA500
         if aqi > 50:
             return 0xFFFF00
-
         return 0x00FF00
+
+    def complications(self):
+        if self._complications is None:
+            self._complications = [
+                Complication(
+                    "full", FULL[0], FULL[1], lambda: self._build_group("full")
+                ),
+                Complication(
+                    "quarter",
+                    QUARTER[0],
+                    QUARTER[1],
+                    lambda: self._build_group("quarter"),
+                ),
+                Complication(
+                    "eighth", EIGHTH[0], EIGHTH[1], lambda: self._build_group("eighth")
+                ),
+            ]
+        return self._complications

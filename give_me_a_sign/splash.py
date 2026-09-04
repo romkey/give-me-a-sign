@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/splash - splash screen module for LED Matrix display
-====================================================
+===================================================================
 
 * Author: John Romkey
 """

@@ -24,6 +24,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/romkey/give-me-a-sign"
+Documentation = "https://give-me-a-sign.readthedocs.io/"
 Repository = "https://github.com/romkey/give-me-a-sign.git"
 Issues = "https://github.com/romkey/give-me-a-sign/issues"
 

@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/weather - weather module for LED Matrix display
-====================================================
+==============================================================
 
 * Author: John Romkey
 """
@@ -15,11 +15,9 @@ import displayio
 import terminalio
 
 from ._paths import ASSETS_DIR
+from .complication import EIGHTH, FULL, HALF_WIDE, QUARTER, Complication
+from .module import SignModule
 
-# OpenWeatherMap ``weather[].id`` -> icon filename stem.
-# See openweathermap.org/weather-conditions.
-# Night clear sky uses icon ``01n`` from the API.
-# Include ``"icon": "01n"`` in ``current`` when id is 800.
 OWM_ID_TO_ICON = {
     200: "11d",
     201: "11d",
@@ -103,34 +101,22 @@ _LEGACY_CONDITIONS_ICON = {
 }
 
 
-class Weather:
+class Weather(SignModule):
     """
-    Manages the display of weather conditions and forecast
-
-    The server receives weather conditions them in the Data store under the key "weather".
-    This class retrieves the conditions and displays them.
-
-    Display includes a color coded current temperature, as well as humidity,
-    forecast high and low, and an image indicating current conditions (sunny, cloudy, etc).
+    Manages the display of weather conditions and forecast.
     """
 
+    NAME = "weather"
     KEY = "weather"
+    ENDPOINTS = ("weather", "forecast")
+    STALE_SECONDS = 60 * 60
 
     def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
-        self._app = app
+        super().__init__(app)
+        self._complications = None
 
     @staticmethod
     def _image_stem(current) -> str:
-        """
-        Resolve the icon stem for ``assets/w/{stem}.bmp`` (bundled under the
-        ``give_me_a_sign`` package) from OpenWeatherMap-style fields or legacy names.
-
-        Priority: ``icon`` (e.g. ``10n``), ``condition_id`` + map, numeric ``conditions``,
-        legacy string ``conditions``, else literal ``conditions`` stem.
-        """
         icon = current.get("icon")
         if isinstance(icon, str):
             stem = icon.strip().lower()
@@ -182,53 +168,35 @@ class Weather:
             pass
         return text
 
-    def show(self) -> bool:
-        """
-        Display the current weather conditions if valid.
+    def should_show(self) -> bool:
+        if not self.store.has_item("weather"):
+            return False
+        if (
+            self.STALE_SECONDS is not None
+            and self.store.age("weather") > self.STALE_SECONDS
+        ):
+            return False
+        return True
 
-        Conditions are stored in Data under the key "weather"
-
-        Data structure should look like:
-
-        .. code-block:: python
-        current weather (key "weather", OpenWeatherMap-friendly):
-           { "current":
-             {
-               conditions: 500,
-               icon: "10d",
-               condition_id: 500,
-               temperature: 79,
-               humidity: 45,
-               pressure: 1112
-             }
-           }
-
-        Use ``icon`` from the API when present (required for clear night ``01n`` vs ``01d``).
-        ``conditions`` may be a legacy name (``sunny``) or numeric condition id string.
-        forecast (key "forecast"):
-           {
-             low: 55,
-             high: 79
-            }
-
-        Temperatures and humidity may be floating point.
-        """
-        weather = self._app.data.get_item("weather")
-        forecast = self._app.data.get_item("forecast")
+    def _current_data(self):
+        weather = self.store.get_item("weather")
+        forecast = self.store.get_item("forecast")
         if not isinstance(weather, dict) or not isinstance(
             weather.get("current"), dict
         ):
-            return False
+            return None, None, None
 
         current = weather["current"]
+        try:
+            temperature = int(current["temperature"])
+            humidity = int(current["humidity"])
+        except (KeyError, TypeError, ValueError):
+            return None, None, None
 
-        self._app.data.clear_updated("weather")
-        self._app.data.clear_updated("forecast")
+        return current, forecast, (temperature, humidity)
 
-        group = displayio.Group()
-
+    def _append_icon(self, group, current, x=0, y=0):
         image_filename = f"{ASSETS_DIR}/w/{Weather._image_stem(current)}.bmp"
-
         try:
             bitmap, palette = adafruit_imageload.load(
                 image_filename,
@@ -236,73 +204,131 @@ class Weather:
                 palette=displayio.Palette,
             )
             tile_group = displayio.TileGrid(bitmap, pixel_shader=palette)
-
+            tile_group.x = x
+            tile_group.y = y
             group.append(tile_group)
+            return True
         except OSError:
             print(f"weather conditions {image_filename} - file not found")
         except NotImplementedError:
             self._app.logger.error(f"Image {image_filename} unsupported")
-            return False
+        return False
 
-        try:
-            temperature = int(current["temperature"])
+    def _build_group(self, layout):
+        current, forecast, values = self._current_data()
+        if current is None:
+            return None
+
+        temperature, humidity = values
+        group = displayio.Group()
+
+        if layout == "full":
+            self._append_icon(group, current)
             temp_text = adafruit_display_text.label.Label(
                 terminalio.FONT,
                 color=Weather._temp_color(temperature),
                 text=str(temperature),
             )
-        except (KeyError, TypeError, ValueError):
+            temp_text.x = 40
+            temp_text.y = 10
+            group.append(temp_text)
+            forecast_text = Weather._forecast_text(forecast, humidity)
+            high_low_text = adafruit_display_text.label.Label(
+                terminalio.FONT,
+                color=0x00FF00,
+                text=forecast_text,
+            )
+            high_low_text.x = 0
+            high_low_text.y = 24
+            group.append(high_low_text)
+        elif layout == "half":
+            self._append_icon(group, current)
+            temp_text = adafruit_display_text.label.Label(
+                terminalio.FONT,
+                color=Weather._temp_color(temperature),
+                text=str(temperature),
+            )
+            temp_text.x = 40
+            temp_text.y = 4
+            group.append(temp_text)
+        elif layout == "quarter":
+            self._append_icon(group, current, x=0, y=0)
+            temp_text = adafruit_display_text.label.Label(
+                terminalio.FONT,
+                color=Weather._temp_color(temperature),
+                text=str(temperature),
+            )
+            temp_text.x = 18
+            temp_text.y = 8
+            group.append(temp_text)
+        elif layout == "temp8":
+            temp_text = adafruit_display_text.label.Label(
+                terminalio.FONT,
+                color=Weather._temp_color(temperature),
+                text=f"{temperature}F",
+            )
+            temp_text.x = 0
+            temp_text.y = 0
+            group.append(temp_text)
+        elif layout == "humidity8":
+            label = adafruit_display_text.label.Label(
+                terminalio.FONT,
+                color=0x00FF00,
+                text=f"{humidity}%",
+            )
+            label.x = 0
+            label.y = 0
+            group.append(label)
+
+        return group
+
+    def show(self) -> bool:
+        self.store.clear_updated("weather")
+        self.store.clear_updated("forecast")
+        group = self._build_group("full")
+        if group is None:
             return False
-
-        temp_text.x = 40
-        temp_text.y = 10
-        group.append(temp_text)
-
-        try:
-            humidity = int(current["humidity"])
-        except (KeyError, TypeError, ValueError):
-            return False
-
-        forecast_text = Weather._forecast_text(forecast, humidity)
-
-        high_low_text = adafruit_display_text.label.Label(
-            terminalio.FONT,
-            color=0x00FF00,
-            text=forecast_text,
-        )
-
-        high_low_text.x = 0
-        high_low_text.y = 24
-        group.append(high_low_text)
-
         self._app.show_group(group)
         return True
 
     @staticmethod
     def _temp_color(temp) -> int:
-        """
-        Returns an RGB color corresponding to the temperature
-
-        :param int temp - temperature in degrees F
-        """
         if temp < 50:
             return 0x0000FF
-
         if temp < 70:
             return 0x0D98BA
-
         if temp > 89:
             return 0xFF0000
-
         if temp > 79:
             return 0xFFA500
-
         return 0x00FF00
 
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
-
-        return
+    def complications(self):
+        if self._complications is None:
+            self._complications = [
+                Complication(
+                    "full", FULL[0], FULL[1], lambda: self._build_group("full")
+                ),
+                Complication(
+                    "half",
+                    HALF_WIDE[0],
+                    HALF_WIDE[1],
+                    lambda: self._build_group("half"),
+                ),
+                Complication(
+                    "quarter",
+                    QUARTER[0],
+                    QUARTER[1],
+                    lambda: self._build_group("quarter"),
+                ),
+                Complication(
+                    "temp8", EIGHTH[0], EIGHTH[1], lambda: self._build_group("temp8")
+                ),
+                Complication(
+                    "humidity8",
+                    EIGHTH[0],
+                    EIGHTH[1],
+                    lambda: self._build_group("humidity8"),
+                ),
+            ]
+        return self._complications

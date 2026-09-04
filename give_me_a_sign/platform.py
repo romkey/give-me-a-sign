@@ -4,7 +4,7 @@
 
 """
 give-me-a-sign/platform - networking for native-WiFi LED matrix boards
-====================================================
+======================================================================
 
 * Author: John Romkey
 """

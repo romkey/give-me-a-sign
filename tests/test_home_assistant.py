@@ -4,7 +4,15 @@
 
 """Unit tests for Home Assistant MQTT autodiscovery configs."""
 
+from types import SimpleNamespace
+
+import pytest
+
+from give_me_a_sign.greet import Greet
 from give_me_a_sign.home_assistant import HomeAssistant
+from give_me_a_sign.message import Message
+from give_me_a_sign.module import ModuleStore
+from give_me_a_sign.registry import ModuleRegistry
 
 
 class _DummyMQTT:
@@ -19,9 +27,20 @@ def _configs_by_topic(messages):
     return {message["topic"]: message["payload"] for message in messages}
 
 
-def test_autodiscovery_includes_device_time_and_publish_data():
+def _ha_with_modules(monkeypatch):
+    monkeypatch.setattr(ModuleStore, "_restore", lambda self: False)
+    app = SimpleNamespace()
+    modules = ModuleRegistry(app)
+    modules.register(Greet(app))
+    modules.register(Message(app))
     base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
     ha = HomeAssistant("aa:bb:cc:dd:ee:ff", _DummyMQTT(), base)
+    ha.set_modules(modules)
+    return ha, base
+
+
+def test_autodiscovery_includes_device_time_and_publish_data(monkeypatch):
+    ha, base = _ha_with_modules(monkeypatch)
     configs = _configs_by_topic(ha.create_autodiscovery_config())
 
     datetime_topic = (
@@ -48,9 +67,8 @@ def test_autodiscovery_includes_device_time_and_publish_data():
     assert button_payload["availability_topic"] == f"{base}/available"
 
 
-def test_autodiscovery_still_includes_reboot_and_display():
-    base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
-    ha = HomeAssistant("aa:bb:cc:dd:ee:ff", _DummyMQTT(), base)
+def test_autodiscovery_still_includes_reboot_and_display(monkeypatch):
+    ha, base = _ha_with_modules(monkeypatch)
     configs = _configs_by_topic(ha.create_autodiscovery_config())
 
     reboot = configs["homeassistant/button/givemeasign_aa_bb_cc_dd_ee_ff/reboot/config"]
@@ -64,9 +82,8 @@ def test_autodiscovery_still_includes_reboot_and_display():
     assert display["state_topic"] == f"{base}/display/state"
 
 
-def test_autodiscovery_uses_expected_sensor_metadata_and_notify_template():
-    base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
-    ha = HomeAssistant("aa:bb:cc:dd:ee:ff", _DummyMQTT(), base)
+def test_autodiscovery_uses_expected_sensor_metadata_and_notify_template(monkeypatch):
+    ha, _ = _ha_with_modules(monkeypatch)
     configs = _configs_by_topic(ha.create_autodiscovery_config())
 
     free_memory = configs[
@@ -86,10 +103,9 @@ def test_autodiscovery_uses_expected_sensor_metadata_and_notify_template():
     assert notify_message["command_template"] == "{{ value_json.message }}"
 
 
-def test_publish_advertisements_uses_retain_and_qos_1():
-    base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
-    mqtt = _DummyMQTT()
-    ha = HomeAssistant("aa:bb:cc:dd:ee:ff", mqtt, base)
+def test_publish_advertisements_uses_retain_and_qos_1(monkeypatch):
+    ha, _base = _ha_with_modules(monkeypatch)
+    mqtt = ha._mqtt_client
 
     ha.publish_advertisements()
 

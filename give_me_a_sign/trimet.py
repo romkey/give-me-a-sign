@@ -4,79 +4,22 @@
 
 """
 give-me-a-sign/trimet - Trimet public transit module for LED Matrix display
-====================================================
+===========================================================================
 
 * Author: John Romkey
 """
 
-import displayio
-import terminalio
-import adafruit_display_text.label
+from .module import SignModule
 
 
-class Trimet:
+class Trimet(SignModule):
     """
-    Manages the display of Trimet info on the sign.
-
-    The server receives Trimet data and stashes it in the Data store under the key "trimet".
-    This class retrieves a message and displays it.
-
-    Trimet data is an array of upcoming arrivals and departures with "shortSign" info on the
-    line, the time, and an indication of the transportation type ("bus", "light rail", ...).
+    Stores Trimet transit data. Display is not yet implemented.
     """
 
+    NAME = "trimet"
     KEY = "trimet"
-
-    def __init__(self, app):
-        """
-        :param app: the GiveMeASign object this belongs to
-        """
-
-        self._app = app
+    ENDPOINTS = (KEY,)
 
     def show(self) -> bool:
-        """
-        Display Trimet on the screen
-
-        The server receives index and stashes it in the Data store under the key "uv".
-        This class retrieves index and displays it.
-
-        Data structure should look like:
-
-        .. code-block:: python
-           { "index": integer }
-        """
-
-        trimet = self._app.data.get_item(Trimet.KEY)
-        self._app.data.clear_updated(Trimet.KEY)
-
-        try:
-            index = trimet["index"]
-        except (TypeError, KeyError):
-            return False
-
-        if index == 0:
-            return False
-
-        line = adafruit_display_text.label.Label(
-            terminalio.FONT,
-            color=0x800080,
-            text="UVI " + str(int(index * 10) / 10.0),
-        )
-
-        line.x = 0
-        line.y = 12
-
-        group = displayio.Group()
-        group.append(line)
-        self._app.show_group(group)
-
-        return True
-
-    def loop(self) -> None:  # pylint: disable=no-self-use
-        """
-        loop function does any needed incremental processing like scrolling
-        not currently used or called
-        """
-
-        return
+        return False
