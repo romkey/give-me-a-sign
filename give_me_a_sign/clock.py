@@ -337,5 +337,7 @@ class Clock(SignModule):
             return
         label = clock.mini_clock()
         label.x = app.canvas_width - label.bounding_box[2]
-        label.y = 2
+        # Label y is the text's vertical center, so half its height sits it
+        # flush against the top edge. A smaller y clips the top row of pixels.
+        label.y = label.bounding_box[3] // 2
         group.append(label)
