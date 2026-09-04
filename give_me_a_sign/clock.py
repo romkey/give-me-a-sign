@@ -18,7 +18,14 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
 
 from ._paths import ASSETS_DIR
-from .complication import EIGHTH, FULL, HALF_WIDE, QUARTER, Complication
+from .complication import (
+    EIGHTH,
+    FULL,
+    HALF_WIDE,
+    QUARTER,
+    Complication,
+    place_top,
+)
 from .module import SignModule
 
 
@@ -314,8 +321,7 @@ class Clock(SignModule):
         group = displayio.Group()
         label = self.mini_clock()
         label.x = 0
-        # Label y is the text's vertical center, so center it in the slot.
-        label.y = EIGHTH[1] // 2
+        place_top(label)
         group.append(label)
         return group
 
@@ -337,7 +343,5 @@ class Clock(SignModule):
             return
         label = clock.mini_clock()
         label.x = app.canvas_width - label.bounding_box[2]
-        # Label y is the text's vertical center, so half its height sits it
-        # flush against the top edge. A smaller y clips the top row of pixels.
-        label.y = label.bounding_box[3] // 2
+        place_top(label)
         group.append(label)

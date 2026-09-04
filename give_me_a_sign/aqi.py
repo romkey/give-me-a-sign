@@ -14,7 +14,7 @@ import displayio
 import terminalio
 
 from .clock import Clock
-from .complication import EIGHTH, FULL, QUARTER, Complication
+from .complication import EIGHTH, FULL, QUARTER, Complication, place_top
 from .module import SignModule
 
 
@@ -67,8 +67,7 @@ class AQI(SignModule):
                 terminalio.FONT, color=AQI._aqi_color(index), text="AQI" + str(index)
             )
             line.x = 0
-            # Label y is the text's vertical center, so center it in the slot.
-            line.y = EIGHTH[1] // 2
+            place_top(line)
             group.append(line)
         return group
 

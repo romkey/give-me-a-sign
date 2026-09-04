@@ -42,20 +42,21 @@ def _module(monkeypatch, cls, key, payload):
         (Weather, "weather", _WEATHER, "humidity8"),
     ],
 )
-def test_eighth_labels_fit_inside_the_slot(monkeypatch, cls, key, payload, layout):
+def test_eighth_labels_sit_at_the_top_of_the_slot(
+    monkeypatch, cls, key, payload, layout
+):
     """
-    Label y is the text's vertical center in this codebase, so a label at y=0
-    hangs half of itself above the group and gets clipped.
+    A Label's y is not its top edge: the text starts bounding_box[1] rows
+    above it (a negative number). Setting y = 0 therefore hangs the text off
+    the top of the group, where it gets clipped.
     """
     module = _module(monkeypatch, cls, key, payload)
     group = module._build_group(layout)
     assert group is not None
 
     label = group[0]
-    half_height = label.bounding_box[3] // 2
-    assert label.y == EIGHTH[1] // 2
-    assert label.y - half_height >= 0
-    assert label.y + half_height <= EIGHTH[1]
+    top_row = label.y + label.bounding_box[1]
+    assert top_row == 0
 
 
 class _ModuleRegistry:
@@ -78,9 +79,8 @@ class _StubClock:
 
 def test_append_mini_clock_keeps_the_whole_label_on_screen():
     """
-    The mini clock sits flush in the top-right corner of the full screens.
-    Label y is the text's vertical center, so a y below half the text height
-    clipped the top row of pixels.
+    The mini clock sits flush in the top-right corner of the full screens:
+    its first pixel row on 0 and its last column on the right edge.
     """
     app = _App()
     stub = _StubClock()
@@ -90,8 +90,7 @@ def test_append_mini_clock_keeps_the_whole_label_on_screen():
     Clock.append_mini_clock(app, group)
 
     label = group[0]
-    half_height = label.bounding_box[3] // 2
-    assert label.y - half_height >= 0
+    assert label.y + label.bounding_box[1] == 0
     assert label.x + label.bounding_box[2] == app.canvas_width
 
 

@@ -4,7 +4,7 @@
 
 """Unit tests for pollen count parsing."""
 
-from give_me_a_sign.complication import EIGHTH, HALF_WIDE
+from give_me_a_sign.complication import HALF_WIDE
 from give_me_a_sign.module import ModuleStore
 from give_me_a_sign.pollen import Pollen
 
@@ -55,11 +55,10 @@ def test_half_layout_puts_grass_in_the_right_column(monkeypatch):
         assert 0 <= item.y < HALF_WIDE[1]
 
 
-def test_eighth_layouts_center_the_count_in_the_slot(monkeypatch):
-    """Label y is the text's center, so y=0 would clip the top half away."""
+def test_eighth_layouts_put_the_count_at_the_top_of_the_slot(monkeypatch):
+    """y = 0 would hang the text above the group, where it is clipped."""
     module = _pollen(monkeypatch, {"tree": 7, "grass": 3})
 
     for layout in ("tree", "grass"):
         _icon, label = module._build_group(layout)
-        assert label.y == EIGHTH[1] // 2
-        assert label.y - label.bounding_box[3] // 2 >= 0
+        assert label.y + label.bounding_box[1] == 0
