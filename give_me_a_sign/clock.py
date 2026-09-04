@@ -14,10 +14,9 @@ give-me-a-sign/clock - clock module for LED Matrix display
 import time
 
 import displayio
-from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
 
-from ._paths import ASSETS_DIR
+from . import fonts
 from .complication import (
     EIGHTH,
     FULL,
@@ -62,13 +61,9 @@ class Clock(SignModule):
         super().__init__(app)
 
         self._group = displayio.Group()
-        self._full_font = bitmap_font.load_font(
-            ASSETS_DIR + "/IBMPlexMono-Medium-24_jep.bdf"
-        )
+        self._full_font = fonts.full()
         self._clock_label = Label(self._full_font)
         self._group.append(self._clock_label)
-        self._mini_font = None
-        self._small_font = None
 
         self._next_ntp_attempt = 0
         self._ntp_update()
@@ -95,20 +90,6 @@ class Clock(SignModule):
         self._clock_label.y = self._app.canvas_height // 2
         self._app.show_group(self._group)
 
-    def _mini_font_loaded(self):
-        if self._mini_font is None:
-            self._mini_font = bitmap_font.load_font(
-                ASSETS_DIR + "/fonts/intelone-mono-font-family-regular-6.bdf"
-            )
-        return self._mini_font
-
-    def _small_font_loaded(self):
-        if self._small_font is None:
-            self._small_font = bitmap_font.load_font(
-                ASSETS_DIR + "/fonts/intelone-mono-font-family-regular-6.bdf"
-            )
-        return self._small_font
-
     def _make_time_label(self, font):
         label = Label(font)
         self.clock(label)
@@ -116,7 +97,7 @@ class Clock(SignModule):
 
     def mini_clock(self) -> Label:
         """Return a small clock label for use as a complication."""
-        return self._make_time_label(self._mini_font_loaded())
+        return self._make_time_label(fonts.small())
 
     def show(self) -> bool:
         self.update_time()
@@ -301,7 +282,7 @@ class Clock(SignModule):
 
     def _render_half(self):
         group = displayio.Group()
-        label = self._make_time_label(self._mini_font_loaded())
+        label = self._make_time_label(fonts.small())
         bb_width = label.bounding_box[2]
         label.x = round(HALF_WIDE[0] / 2 - bb_width / 2)
         label.y = HALF_WIDE[1] // 2
@@ -310,7 +291,7 @@ class Clock(SignModule):
 
     def _render_quarter(self):
         group = displayio.Group()
-        label = self._make_time_label(self._small_font_loaded())
+        label = self._make_time_label(fonts.small())
         bb_width = label.bounding_box[2]
         label.x = round(QUARTER[0] / 2 - bb_width / 2)
         label.y = QUARTER[1] // 2

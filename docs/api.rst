@@ -26,6 +26,9 @@ Core
 .. automodule:: give_me_a_sign.config
    :members:
 
+.. automodule:: give_me_a_sign.fonts
+   :members:
+
 .. automodule:: give_me_a_sign.data
    :members:
 

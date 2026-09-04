@@ -9,7 +9,6 @@ give-me-a-sign/greet - greeter module for LED Matrix display
 * Author: John Romkey
 """
 
-import json
 import os
 import adafruit_display_text.label
 import displayio
@@ -36,16 +35,7 @@ class Greet(SignModule):
         self._complications = None
 
     def normalize_payload(self, endpoint, raw):  # pylint: disable=unused-argument
-        try:
-            data = json.loads(raw)
-        except (TypeError, ValueError):
-            data = None
-        if not isinstance(data, dict):
-            text = raw if data is None else data
-            if not isinstance(text, str):
-                text = str(text)
-            return {"person": text}
-        return data
+        return self.normalize_text_payload(raw, "person")
 
     def wants_interrupt(self) -> bool:
         if not self.store.is_updated(Greet.KEY):

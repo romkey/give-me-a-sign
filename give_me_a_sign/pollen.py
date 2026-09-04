@@ -13,6 +13,7 @@ import adafruit_display_text.label
 import displayio
 import terminalio
 
+from . import fonts
 from .clock import Clock
 from .complication import EIGHTH, FULL, HALF_WIDE, Complication, place_top
 from .module import SignModule
@@ -155,15 +156,18 @@ class Pollen(SignModule):
         """
         Draw one icon-and-count row.
 
-        *text_y* is the label's y as displayio understands it. Pass None to
-        top-align the count instead, for slots too short to place it by eye.
+        *text_y* is the label's y as displayio understands it. Pass None for
+        an eighth slot: the count is then top-aligned in the small font,
+        which is the only one that fits 8 rows without painting over the
+        slot stacked beneath it.
         """
         row_icon = displayio.TileGrid(icon.bitmap, pixel_shader=icon.pixel_shader)
         row_icon.x = _ICON_X + x_offset
         row_icon.y = icon_y
         group.append(row_icon)
+        font = fonts.small() if text_y is None else terminalio.FONT
         label = adafruit_display_text.label.Label(
-            terminalio.FONT, color=_TEXT_COLOR, text=str(count)
+            font, color=_TEXT_COLOR, text=str(count)
         )
         label.x = _TEXT_X + x_offset
         if text_y is None:
