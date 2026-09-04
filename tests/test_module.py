@@ -72,3 +72,26 @@ def test_duration_default(module):
 def test_duration_from_payload(module):
     module.store.set_item("sample", {"value": 1, "duration": 30})
     assert module.duration() == 30
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ('{"person": "John R."}', {"person": "John R."}),
+        ('{"door": "front"}', {"door": "front"}),
+        ("John R.", {"person": "John R."}),
+        ('"John R."', {"person": "John R."}),
+        ("5", {"person": "5"}),
+        ("[1, 2]", {"person": "[1, 2]"}),
+    ],
+)
+def test_normalize_text_payload(raw, expected):
+    """
+    greet and message both accept plain text as well as JSON. A JSON object
+    passes through; anything else becomes {key: text}.
+    """
+    assert SignModule.normalize_text_payload(raw, "person") == expected
+
+
+def test_normalize_text_payload_uses_the_given_key():
+    assert SignModule.normalize_text_payload("hello", "text") == {"text": "hello"}

@@ -201,6 +201,27 @@ class SignModule:  # pylint: disable=too-few-public-methods
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def normalize_text_payload(raw, key):
+        """
+        Parse a payload that may be a JSON object or a bare string.
+
+        Endpoints that accept plain text as well as JSON wrap a bare payload
+        as ``{key: text}`` and pass a JSON object through untouched.
+        """
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            data = None
+
+        if isinstance(data, dict):
+            return data
+
+        text = raw if data is None else data
+        if not isinstance(text, str):
+            text = str(text)
+        return {key: text}
+
     def show(self) -> bool:  # pylint: disable=no-self-use
         """Render this module's screen. Return True if something was displayed."""
         return False

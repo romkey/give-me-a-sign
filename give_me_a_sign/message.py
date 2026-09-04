@@ -9,7 +9,6 @@ give-me-a-sign/message - text message module for LED Matrix display
 * Author: John Romkey
 """
 
-import json
 import displayio
 import terminalio
 from adafruit_display_text.label import Label
@@ -35,17 +34,9 @@ class Message(SignModule):
         self._complications = None
 
     def normalize_payload(self, endpoint, raw):  # pylint: disable=unused-argument
-        try:
-            data = json.loads(raw)
-        except (TypeError, ValueError):
-            data = None
+        data = self.normalize_text_payload(raw, "text")
 
-        if not isinstance(data, dict):
-            text = raw if data is None else data
-            if not isinstance(text, str):
-                text = str(text)
-            return {"text": text}
-
+        # Home Assistant's notify payloads carry the body under "message".
         if "text" not in data and isinstance(data.get("message"), str):
             return {"text": data["message"]}
         return data
