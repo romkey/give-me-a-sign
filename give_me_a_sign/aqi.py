@@ -13,6 +13,7 @@ import adafruit_display_text.label
 import displayio
 import terminalio
 
+from . import fonts
 from .clock import Clock
 from .complication import EIGHTH, FULL, QUARTER, Complication, place_top
 from .module import SignModule
@@ -63,8 +64,10 @@ class AQI(SignModule):
             line.y = 8
             group.append(line)
         elif layout == "eighth":
+            # terminalio's 12-row glyph cell overflows an 8-row slot and
+            # displayio does not clip, so use the font that fits.
             line = adafruit_display_text.label.Label(
-                terminalio.FONT, color=AQI._aqi_color(index), text="AQI" + str(index)
+                fonts.small(), color=AQI._aqi_color(index), text="AQI" + str(index)
             )
             line.x = 0
             place_top(line)

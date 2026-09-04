@@ -14,6 +14,7 @@ import adafruit_imageload
 import displayio
 import terminalio
 
+from . import fonts
 from ._paths import ASSETS_DIR
 from .complication import (
     EIGHTH,
@@ -269,8 +270,10 @@ class Weather(SignModule):
             temp_text.y = 8
             group.append(temp_text)
         elif layout == "temp8":
+            # terminalio's 12-row glyph cell overflows an 8-row slot and
+            # displayio does not clip, so use the font that fits.
             temp_text = adafruit_display_text.label.Label(
-                terminalio.FONT,
+                fonts.small(),
                 color=Weather._temp_color(temperature),
                 text=f"{temperature}F",
             )
@@ -278,8 +281,10 @@ class Weather(SignModule):
             place_top(temp_text)
             group.append(temp_text)
         elif layout == "humidity8":
+            # terminalio's 12-row glyph cell overflows an 8-row slot and
+            # displayio does not clip, so use the font that fits.
             label = adafruit_display_text.label.Label(
-                terminalio.FONT,
+                fonts.small(),
                 color=0x00FF00,
                 text=f"{humidity}%",
             )

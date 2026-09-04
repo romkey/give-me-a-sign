@@ -13,6 +13,7 @@ import displayio
 import terminalio
 import adafruit_display_text.label
 
+from . import fonts
 from .clock import Clock
 from .complication import EIGHTH, FULL, QUARTER, Complication, place_top
 from .module import SignModule
@@ -76,8 +77,10 @@ class UV(SignModule):
             group.append(line)
         elif layout == "eighth":
             compact = "UV" + str(int(index * 10) / 10.0)
+            # terminalio's 12-row glyph cell overflows an 8-row slot and
+            # displayio does not clip, so use the font that fits.
             line = adafruit_display_text.label.Label(
-                terminalio.FONT, color=0x800080, text=compact
+                fonts.small(), color=0x800080, text=compact
             )
             line.x = 0
             place_top(line)

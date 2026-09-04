@@ -12,6 +12,7 @@ from give_me_a_sign.aqi import AQI
 from give_me_a_sign.clock import Clock
 from give_me_a_sign.complication import EIGHTH
 from give_me_a_sign.module import ModuleStore
+from give_me_a_sign.pollen import Pollen
 from give_me_a_sign.uv import UV
 from give_me_a_sign.weather import Weather
 
@@ -101,3 +102,52 @@ def test_append_mini_clock_without_a_clock_module():
     group = Group()
     Clock.append_mini_clock(app, group)
     assert len(group) == 0
+
+
+def _eighth_groups(monkeypatch):
+    """Every eighth-slot complication, as (name, rendered group) pairs."""
+    monkeypatch.setattr(ModuleStore, "_restore", lambda self: False)
+
+    aqi = AQI(_App())
+    aqi.store.set_item(AQI.KEY, {"aqi": 142})
+
+    uv = UV(_App())
+    uv.store.set_item(UV.KEY, {"index": 3.5})
+
+    weather = Weather(_App())
+    weather.store.set_item("weather", _WEATHER)
+
+    pollen = Pollen(_App())
+    pollen.store.set_item(Pollen.KEY, {"tree": 7, "grass": 3})
+
+    return [
+        ("aqi.eighth", aqi._build_group("eighth")),
+        ("uv.eighth", uv._build_group("eighth")),
+        ("weather.temp8", weather._build_group("temp8")),
+        ("weather.humidity8", weather._build_group("humidity8")),
+        ("pollen.tree", pollen._build_group("tree")),
+        ("pollen.grass", pollen._build_group("grass")),
+    ]
+
+
+def test_eighth_complications_stay_inside_their_slot(monkeypatch):
+    """
+    displayio.Group does not clip its children, so anything taller than the
+    8-row slot paints over whichever complication is stacked beneath it —
+    which examples/config.json does, with aqi.eighth at y=0 above
+    pollen.tree at y=8.
+
+    terminalio.FONT has a 12-row glyph cell and cannot be used here at all;
+    positioning alone will not make it fit.
+    """
+    for name, group in _eighth_groups(monkeypatch):
+        assert group is not None, name
+        for item in group:
+            top = item.y + (
+                item.bounding_box[1] if hasattr(item, "bounding_box") else 0
+            )
+            height = item.bounding_box[3] if hasattr(item, "bounding_box") else 6
+            assert top >= 0, f"{name}: {top} above the slot"
+            assert (
+                top + height <= EIGHTH[1]
+            ), f"{name}: reaches row {top + height}, past the {EIGHTH[1]}-row slot"
