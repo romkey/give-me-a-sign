@@ -280,6 +280,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
                 module.on_side_effect()
 
         for module in self.modules.modules():
+            module.background()
             if module.NEEDS_LOOP_ALWAYS:
                 module.loop()
 
@@ -400,7 +401,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         clock = self.modules.get("clock")
         if clock is not None:
             self._set_countdown(clock.DEFAULT_DURATION)
-            clock.show()
+            clock.loop()
 
     def _run_rotation(self):
         if not self._rotation:

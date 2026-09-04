@@ -18,7 +18,14 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text.label import Label
 
 from ._paths import ASSETS_DIR
-from .complication import EIGHTH, FULL, HALF_WIDE, QUARTER, Complication
+from .complication import (
+    EIGHTH,
+    FULL,
+    HALF_WIDE,
+    QUARTER,
+    Complication,
+    place_top,
+)
 from .module import SignModule
 
 
@@ -115,10 +122,14 @@ class Clock(SignModule):
         self.update_time()
         return True
 
-    def loop(self):
+    def background(self):
+        """Resync NTP on schedule, whether or not the clock is on screen."""
         if time.monotonic_ns() >= self._next_ntp_attempt:
             print("NTP update")
             self._ntp_update()
+
+    def loop(self):
+        self.background()
 
         if (
             self._last_update_time is None
@@ -310,7 +321,7 @@ class Clock(SignModule):
         group = displayio.Group()
         label = self.mini_clock()
         label.x = 0
-        label.y = 0
+        place_top(label)
         group.append(label)
         return group
 
@@ -332,5 +343,5 @@ class Clock(SignModule):
             return
         label = clock.mini_clock()
         label.x = app.canvas_width - label.bounding_box[2]
-        label.y = 2
+        place_top(label)
         group.append(label)

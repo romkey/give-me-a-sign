@@ -14,7 +14,7 @@ import terminalio
 import adafruit_display_text.label
 
 from .clock import Clock
-from .complication import EIGHTH, FULL, QUARTER, Complication
+from .complication import EIGHTH, FULL, QUARTER, Complication, place_top
 from .module import SignModule
 
 
@@ -80,7 +80,7 @@ class UV(SignModule):
                 terminalio.FONT, color=0x800080, text=compact
             )
             line.x = 0
-            line.y = 0
+            place_top(line)
             group.append(line)
         return group
 

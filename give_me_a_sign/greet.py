@@ -53,11 +53,13 @@ class Greet(SignModule):
         return True
 
     def _build_group(self):
-        if not self.store.is_updated(Greet.KEY):
-            return None
+        """
+        Render the stored greeting, or None when there isn't a usable one.
 
-        self.store.clear_updated(Greet.KEY)
-
+        This is a pure render of whatever is in the store: the greet.full
+        complication reuses it, so it must not depend on (or clear) the
+        updated flag that :meth:`show` consumes for the interrupt.
+        """
         try:
             person = self.store.get_item(Greet.KEY)["person"]
         except (KeyError, TypeError):
@@ -92,6 +94,12 @@ class Greet(SignModule):
         return group
 
     def show(self) -> bool:
+        # Greet is an interrupt: it shows once per pushed greeting, so the
+        # updated flag is what gates and is consumed here, not in the render.
+        if not self.store.is_updated(Greet.KEY):
+            return False
+        self.store.clear_updated(Greet.KEY)
+
         group = self._build_group()
         if group is None:
             return False
