@@ -15,7 +15,14 @@ import displayio
 import terminalio
 
 from ._paths import ASSETS_DIR
-from .complication import EIGHTH, FULL, HALF_WIDE, QUARTER, Complication
+from .complication import (
+    EIGHTH,
+    FULL,
+    HALF_WIDE,
+    QUARTER,
+    Complication,
+    place_top,
+)
 from .module import SignModule
 
 OWM_ID_TO_ICON = {
@@ -268,7 +275,7 @@ class Weather(SignModule):
                 text=f"{temperature}F",
             )
             temp_text.x = 0
-            temp_text.y = 0
+            place_top(temp_text)
             group.append(temp_text)
         elif layout == "humidity8":
             label = adafruit_display_text.label.Label(
@@ -277,7 +284,7 @@ class Weather(SignModule):
                 text=f"{humidity}%",
             )
             label.x = 0
-            label.y = 0
+            place_top(label)
             group.append(label)
 
         return group

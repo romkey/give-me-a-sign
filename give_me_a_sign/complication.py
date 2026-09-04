@@ -21,6 +21,20 @@ QUARTER = (CANVAS_WIDTH // 2, CANVAS_HEIGHT // 2)
 EIGHTH = (CANVAS_WIDTH // 2, CANVAS_HEIGHT // 4)
 
 
+def place_top(label, y=0):
+    """
+    Position *label* so its topmost pixel row lands on *y*.
+
+    A Label's ``y`` is not its top edge. The text is drawn offset from it by
+    half the font's ascent, and ``bounding_box[1]`` reports that offset as a
+    negative number, so the top row is at ``label.y + bounding_box[1]``.
+    Deriving y from the label's own box keeps text inside its slot whatever
+    font it is rendered in, rather than hardcoding an offset that only holds
+    for one font.
+    """
+    label.y = y - label.bounding_box[1]
+
+
 class Complication:  # pylint: disable=too-few-public-methods
     """
     Descriptor for a fractional rendering of a module's data.
