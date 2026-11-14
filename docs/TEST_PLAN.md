@@ -424,6 +424,9 @@ not valid here. Keep a known-good firmware and a USB cable handy.
 | Corrupt UF2 | Flip a magic byte: `failed: bad UF2 block magic` before anything is switched |
 | Too-small file | A few KB of junk: `failed: image too small (… bytes)` |
 | Display stays alive | During the download the rotation/MQTT keep running (no multi-second freeze); diagnostics keep publishing |
+| Message mid-download | Publish a `message` while downloading: it shows for its full duration, then progress returns — it must not flash for a single frame |
+| Buttons mid-download | Press either button while downloading: the IP/splash screens come up as usual, then progress returns |
+| Failure display window | A failure holds the matrix ~10 s (not ~15 s), then the rotation resumes |
 | Attributes | `$SIGN/ota/attributes` JSON tracks `progress`, `bytes_received`, `bytes_total`, `format`, `error` |
 | Non-dualbank board | On a board without `dualbank`: `failed: dualbank is not available on this board` |
 

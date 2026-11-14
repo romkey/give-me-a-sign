@@ -621,6 +621,21 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     # display
     # ------------------------------------------------------------------
 
+    def _display_is_leased(self) -> bool:
+        """True while another interrupt or a system screen holds the display.
+
+        The main loop rescans the interrupt modules every pass, and Greet,
+        Message, and Image each clear their updated flag inside ``show()``.
+        An update that claimed unconditionally would therefore cut those
+        screens down to a single pass and swallow them for the length of the
+        flash, so it waits for the current lease to run out instead.
+        """
+        app = self._app
+        if getattr(app, "system_screen", None) is not None:
+            return True
+        active = getattr(app, "active_interrupt", None)
+        return active is not None and active is not self
+
     def wants_interrupt(self) -> bool:
         # An update owns the matrix for as long as it runs: progress that
         # vanishes back into the rotation after five seconds is worse than no
@@ -629,8 +644,10 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         # reuses its group until the text changes — ownership and repainting
         # are separate questions.
         if self._state in (STATE_DOWNLOADING, STATE_COUNTDOWN):
-            return True
+            return not self._display_is_leased()
         if self._state == STATE_FAILED:
+            if self._display_is_leased():
+                return False
             # A failure gets a bounded spot on the screen, then the rotation
             # carries on; the status sensor keeps the detail.
             return time.monotonic_ns() < self._failed_until_ns
@@ -638,6 +655,21 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
 
     def should_show(self) -> bool:
         return self._state != STATE_IDLE
+
+    def duration(self) -> int:
+        """Seconds to hold the display when the rotation hands it over.
+
+        Each re-entry resets the interrupt lease, so a fixed five seconds
+        would keep a failure on screen for up to five seconds past its
+        window. Asking for only the time left makes the lease end with the
+        window, give or take the one-second granularity of the countdown.
+        """
+        if self._state == STATE_FAILED:
+            remaining_ns = self._failed_until_ns - time.monotonic_ns()
+            if remaining_ns <= 0:
+                return 1
+            return int((remaining_ns + 999_999_999) // 1_000_000_000)
+        return OTA.DEFAULT_DURATION
 
     def _build_group(self):
         group = displayio.Group()

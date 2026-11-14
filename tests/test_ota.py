@@ -122,6 +122,8 @@ class _Logger:
 class _App:
     def __init__(self, platform):
         self.platform = platform
+        self.active_interrupt = None
+        self.system_screen = None
         self.logger = _Logger()
         self.canvas_width = 64
         self.canvas_height = 32
@@ -492,3 +494,74 @@ def test_failure_holds_the_matrix_then_releases_it(monkeypatch, fake_dualbank):
     # A repeat failure with identical text must win the screen back.
     ota.receive("ota_install", "https://example.invalid/missing.bin")
     assert ota.wants_interrupt()
+
+
+def test_update_defers_to_another_live_interrupt(monkeypatch, fake_dualbank):
+    """A message mid-download must get its full turn, not a single pass.
+
+    Greet, Message, and Image clear their updated flag inside show(), so an
+    update that claimed the matrix unconditionally would swallow them for the
+    length of the flash.
+    """
+    image = b"\x77" * (MIN_IMAGE_BYTES * 2)
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
+    app = ota._app
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+    assert ota.wants_interrupt()
+
+    other = object()
+    app.active_interrupt = other
+    assert not ota.wants_interrupt()
+
+    # The download carries on regardless of who owns the screen.
+    received_before = ota.status_attributes()["bytes_received"]
+    ota.background()
+    assert ota.status_attributes()["bytes_received"] > received_before
+
+    app.active_interrupt = None
+    assert ota.wants_interrupt()
+
+    # Being the active interrupt itself is not a reason to stand down.
+    app.active_interrupt = ota
+    assert ota.wants_interrupt()
+
+
+def test_update_defers_to_button_screens(monkeypatch, fake_dualbank):
+    ota, _ = _make_ota(
+        monkeypatch, _Session(_Response(b"\x77" * (MIN_IMAGE_BYTES + 16)))
+    )
+    app = ota._app
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+
+    for screen in ("ip", "splash"):
+        app.system_screen = screen
+        assert not ota.wants_interrupt()
+    app.system_screen = None
+    assert ota.wants_interrupt()
+
+
+def test_failure_lease_matches_its_window(monkeypatch, fake_dualbank):
+    """duration() must not extend the hold past FAILED_DISPLAY_S."""
+    now = [9_000_000_000]
+    monkeypatch.setattr(ota_module.time, "monotonic_ns", lambda: now[0])
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(b"nope", status_code=404)))
+
+    ota.receive("ota_install", "https://example.invalid/missing.bin")
+    assert ota.state == ota_module.STATE_FAILED
+    assert ota.duration() == ota_module.FAILED_DISPLAY_S
+
+    now[0] += 7 * 1_000_000_000
+    assert ota.duration() == 3
+    assert ota.wants_interrupt()
+
+    # The last lease granted can't outlast the window by more than the
+    # one-second granularity of the main loop's countdown.
+    now[0] += 3 * 1_000_000_000
+    assert not ota.wants_interrupt()
+    assert ota.duration() == 1
+
+    # A download, by contrast, keeps the ordinary lease.
+    ota._state = ota_module.STATE_DOWNLOADING
+    assert ota.duration() == OTA.DEFAULT_DURATION

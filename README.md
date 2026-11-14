@@ -392,6 +392,10 @@ How it works:
 - The download runs a few KiB per pass of the main loop, so the display keeps
   drawing and MQTT keeps flowing while the image comes down. Progress appears
   on the matrix and in Home Assistant.
+- An update in progress holds the matrix, but yields to anything with a turn
+  of its own — a message or greeting that arrives mid-download gets its full
+  duration, and the buttons still bring up the IP and splash screens. The
+  download carries on underneath regardless of what is on screen.
 - `.uf2` input is unwrapped as it streams: each 512-byte UF2 block's 32-byte
   header and trailing magic are dropped and only the payload is flashed, in
   target-address order. Raw `.bin` input is flashed as-is.
