@@ -413,14 +413,16 @@ def test_progress_tracks_content_length(monkeypatch, fake_dualbank):
     assert ota.progress == 100
 
 
-def test_interrupt_is_edge_triggered(monkeypatch, fake_dualbank):
-    """The main loop asks every pass; only new text may claim the display.
+def test_update_owns_the_display_without_rebuilding(monkeypatch, fake_dualbank):
+    """Ownership is level-triggered; repainting is not.
 
-    A level-triggered wants_interrupt() would have the rotation re-enter the
-    interrupt and rebuild labels on every pass of a multi-megabyte download.
+    The main loop asks every pass, so the update must keep the matrix for the
+    whole download — but it must reuse its group until the text changes, or a
+    multi-megabyte flash rebuilds labels thousands of times.
     """
     image = b"\x33" * (MIN_IMAGE_BYTES * 4)
     ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
+    app = ota._app
 
     assert not ota.wants_interrupt()
 
@@ -428,28 +430,65 @@ def test_interrupt_is_edge_triggered(monkeypatch, fake_dualbank):
     assert ota.wants_interrupt()
 
     assert ota.show()
-    assert not ota.wants_interrupt()
+    group = app.shown
+    assert group is not None
 
-    # Pumping without the percentage moving must not ask for a redraw.
-    before = ota.status_message
-    ota.background()
-    if ota.status_message == before:
-        assert not ota.wants_interrupt()
-
-    # ... but once the text changes, it does, exactly once.
-    while ota.state == ota_module.STATE_DOWNLOADING and not ota.wants_interrupt():
-        ota.background()
+    # Same text on later passes: the group is repainted, never rebuilt.
+    message = ota.status_message
+    for _ in range(5):
+        ota.show()
+        assert app.shown is group
+    assert ota.status_message == message
     assert ota.wants_interrupt()
+
+    # New text earns exactly one rebuild.
+    while ota.state == ota_module.STATE_DOWNLOADING and (ota.status_message == message):
+        ota.background()
     ota.show()
-    assert not ota.wants_interrupt()
+    assert app.shown is not group
+    rebuilt = app.shown
+    ota.show()
+    assert app.shown is rebuilt
 
 
-def test_failure_is_shown_once_on_the_matrix(monkeypatch, fake_dualbank):
+def test_display_is_held_with_no_content_length(monkeypatch, fake_dualbank):
+    """Without Content-Length the text is static, and must still hold the screen."""
+    image = b"\x44" * (MIN_IMAGE_BYTES + 512)
+    response = _Response(image, headers={})
+    ota, _ = _make_ota(monkeypatch, _Session(response))
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+    assert ota.progress == 0  # no total to measure against
+
+    # Paint once, so the "has the text changed?" question answers "no" from
+    # here on: the static text must not cost the update its screen.
+    ota.show()
+    for _ in range(3):
+        ota.background()
+        if ota.state != ota_module.STATE_DOWNLOADING:
+            break
+        assert ota.wants_interrupt()
+
+    _drain(ota)
+    assert ota.state == ota_module.STATE_COUNTDOWN
+    assert fake_dualbank.switched
+
+
+def test_failure_holds_the_matrix_then_releases_it(monkeypatch, fake_dualbank):
+    now = [5_000_000_000]
+    monkeypatch.setattr(ota_module.time, "monotonic_ns", lambda: now[0])
     ota, _ = _make_ota(monkeypatch, _Session(_Response(b"nope", status_code=404)))
 
     ota.receive("ota_install", "https://example.invalid/missing.bin")
-
     assert ota.state == ota_module.STATE_FAILED
     assert ota.wants_interrupt()
     ota.show()
+    assert ota.wants_interrupt()  # still ours, unlike a one-shot edge trigger
+
+    now[0] += (ota_module.FAILED_DISPLAY_S + 1) * 1_000_000_000
     assert not ota.wants_interrupt()
+    assert not fake_dualbank.switched
+
+    # A repeat failure with identical text must win the screen back.
+    ota.receive("ota_install", "https://example.invalid/missing.bin")
+    assert ota.wants_interrupt()

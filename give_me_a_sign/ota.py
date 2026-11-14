@@ -58,6 +58,9 @@ CHUNKS_PER_PASS = 8
 #: Seconds between "rebooting in N" ticks once the image is flashed.
 REBOOT_COUNTDOWN_S = 5
 
+#: Seconds a failed update holds the matrix before the rotation resumes.
+FAILED_DISPLAY_S = 10
+
 #: Minimum plausible firmware image; anything shorter is a broken download.
 MIN_IMAGE_BYTES = 64 * 1024
 
@@ -249,9 +252,6 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     ATTRIBUTES_SUFFIX = "ota/attributes"
     URL_SUFFIX = "ota/url"
 
-    #: States worth taking over the display for.
-    ACTIVE_STATES = (STATE_DOWNLOADING, STATE_COUNTDOWN, STATE_FAILED)
-
     def __init__(self, app):
         super().__init__(app)
         self._complications = None
@@ -272,6 +272,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._next_status_ns = 0
         self._status_dirty = True
         self._shown_message = None
+        self._group = None
+        self._failed_until_ns = 0
 
     # ------------------------------------------------------------------
     # MQTT entry points
@@ -533,6 +535,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
 
     def _fail(self, reason) -> None:
         self._app.logger.error(f"module:ota failed: {reason}")
+        self._failed_until_ns = time.monotonic_ns() + FAILED_DISPLAY_S * 1_000_000_000
         self._close_response()
         self._chunks = None
         self._writer = None
@@ -619,14 +622,19 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     # ------------------------------------------------------------------
 
     def wants_interrupt(self) -> bool:
-        # Edge-triggered, like the other interrupt modules: the main loop asks
-        # every pass and re-enters the interrupt (rebuilding labels) whenever
-        # the answer is True, so claiming the display for the whole download
-        # would churn the heap and reset the countdown continuously. Ask only
-        # when there is new text to draw.
-        if self._state not in OTA.ACTIVE_STATES:
-            return False
-        return self._short_message() != self._shown_message
+        # An update owns the matrix for as long as it runs: progress that
+        # vanishes back into the rotation after five seconds is worse than no
+        # progress at all, and with no Content-Length the text never changes
+        # to win the display back. Redraw cost is handled in show(), which
+        # reuses its group until the text changes — ownership and repainting
+        # are separate questions.
+        if self._state in (STATE_DOWNLOADING, STATE_COUNTDOWN):
+            return True
+        if self._state == STATE_FAILED:
+            # A failure gets a bounded spot on the screen, then the rotation
+            # carries on; the status sensor keeps the detail.
+            return time.monotonic_ns() < self._failed_until_ns
+        return False
 
     def should_show(self) -> bool:
         return self._state != STATE_IDLE
@@ -658,15 +666,19 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         return "idle"
 
     def show(self) -> bool:
-        self._app.show_group(self._build_group())
-        self._shown_message = self._short_message()
+        # The main loop calls this every pass while the update owns the
+        # screen, so rebuilding the labels here would churn the heap for the
+        # length of a multi-megabyte flash. Keep the group and repaint it;
+        # only new text costs an allocation.
+        message = self._short_message()
+        if self._group is None or message != self._shown_message:
+            self._group = self._build_group()
+            self._shown_message = message
+        self._app.show_group(self._group)
         return True
 
     def loop(self) -> None:
-        # Same guard as wants_interrupt(): redraw only when the text changes,
-        # whichever path the main loop reaches this module through.
-        if self._short_message() != self._shown_message:
-            self.show()
+        self.show()
 
     def ha_entities(self):
         return [
