@@ -112,3 +112,35 @@ def test_publish_advertisements_uses_retain_and_qos_1(monkeypatch):
     assert mqtt.published
     assert all(call["kwargs"].get("retain") is True for call in mqtt.published)
     assert all(call["kwargs"].get("qos") == 1 for call in mqtt.published)
+
+
+def test_autodiscovery_includes_ota_entities(monkeypatch):
+    from give_me_a_sign.ota import OTA  # pylint: disable=import-outside-toplevel
+
+    monkeypatch.setattr(ModuleStore, "_restore", lambda self: False)
+    app = SimpleNamespace()
+    modules = ModuleRegistry(app)
+    modules.register(OTA(app))
+    base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
+    ha = HomeAssistant("aa:bb:cc:dd:ee:ff", _DummyMQTT(), base)
+    ha.set_modules(modules)
+
+    configs = _configs_by_topic(ha.create_autodiscovery_config())
+    device = "givemeasign_aa_bb_cc_dd_ee_ff"
+
+    text = configs[f"homeassistant/text/{device}/ota_url/config"]
+    assert text["command_topic"] == f"{base}/module/ota_url"
+    assert text["state_topic"] == f"{base}/ota/url"
+    assert text["entity_category"] == "config"
+    # a firmware URL is not a notification target
+    assert f"homeassistant/notify/{device}/ota_url/config" not in configs
+
+    button = configs[f"homeassistant/button/{device}/ota_install/config"]
+    assert button["command_topic"] == f"{base}/module/ota_install"
+    assert button["payload_press"] == "install"
+
+    sensor = configs[f"homeassistant/sensor/{device}/ota_status/config"]
+    assert sensor["state_topic"] == f"{base}/ota/state"
+    assert sensor["json_attributes_topic"] == f"{base}/ota/attributes"
+    assert sensor["entity_category"] == "diagnostic"
+    assert sensor["unique_id"] == f"{device}_ota_status"

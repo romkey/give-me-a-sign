@@ -13,3 +13,4 @@ adafruit-circuitpython-pcf8523
 adafruit-circuitpython-ntp
 adafruit-circuitpython-minimqtt
 adafruit-circuitpython-connectionmanager
+adafruit-circuitpython-requests

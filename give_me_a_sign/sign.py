@@ -62,6 +62,7 @@ from .aqi import AQI
 from .pollen import Pollen
 from .trimet import Trimet
 from .store_only import StoreOnly
+from .ota import OTA
 
 FREE_MEMORY_LIMIT = 10000
 GC_INTERVAL_NS = 5 * 1_000_000_000
@@ -83,6 +84,7 @@ BUILTIN_MODULES = (
     Pollen,
     Trimet,
     StoreOnly,
+    OTA,
 )
 
 
@@ -444,3 +446,19 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
     def platform(self):
         """The platform object providing WiFi and board services."""
         return self._platform
+
+    @property
+    def active_interrupt(self):
+        """The interrupt module currently holding the display, or ``None``.
+
+        A module that wants the display for a long stretch can check this to
+        avoid preempting a screen that is mid-lease: the interrupt scan runs
+        every pass, so a module that always claims would cut every other
+        interrupt down to a single pass.
+        """
+        return self._active_interrupt
+
+    @property
+    def system_screen(self):
+        """The button-driven screen on display (``"ip"``/``"splash"``), or ``None``."""
+        return self._system_state

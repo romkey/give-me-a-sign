@@ -199,6 +199,22 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
         self._mqtt_next_retry_at = 0
         self._maybe_retry_mqtt()
 
+    @property
+    def base_topic(self) -> str:
+        """This sign's per-device topic base, e.g. ``givemeasign/sign/<mac>``."""
+        return self._ha_sign_base
+
+    def publish(self, topic, payload, retain=True, qos=1) -> bool:
+        """Publish *payload* to *topic*. Return False if it couldn't be sent."""
+        if not self.is_connected_to_broker():
+            return False
+        try:
+            self._mqtt.publish(topic, payload, retain=retain, qos=qos)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            print("MQTT publish failed:", error)
+            return False
+        return True
+
     def is_connected_to_broker(self) -> bool:
         """True when an MQTT client exists and reports a live connection."""
         if self._mqtt is None:

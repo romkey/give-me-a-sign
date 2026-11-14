@@ -400,6 +400,36 @@ mosquitto_sub -h $BROKER -t $SIGN/data/state -C 1
 module wired into the rotation (`trimet.py` is a stub). Test only that
 publishing to them does not crash the sign; they show up in nothing.
 
+### 3.17 OTA firmware update
+
+```bash
+mosquitto_pub -h $BROKER -t $SIGN/module/ota_url \
+  -m 'https://example.com/adafruit-circuitpython-matrixportal_s3-en_US-10.0.0.bin'
+mosquitto_sub -h $BROKER -t "$SIGN/ota/#" -v &
+mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m install
+```
+
+Use an **app-only** image: `dualbank` writes one OTA partition, so a
+combined/factory image (bootloader + partition table at absolute offsets) is
+not valid here. Keep a known-good firmware and a USB cable handy.
+
+| Case | Expected |
+|------|----------|
+| `.bin` install | Matrix shows `firmware` + percent; `$SIGN/ota/state` counts up; `dualbank.switch()`, then `rebooting in 5s` … `1s`, then reset into the new build |
+| `.uf2` install | Same, with UF2 headers stripped — the installed build must run (check `circuitpython_version` in diagnostics afterward) |
+| URL on the install topic | Publishing a URL to `module/ota_install` sets and installs in one step |
+| No URL set | `failed: no firmware URL set`; nothing flashed |
+| Bad URL / 404 | `failed: HTTP 404`; current firmware untouched; sign keeps running |
+| Truncated download | Pull the network mid-download: `failed: …`; sign keeps running; the old partition still boots |
+| Corrupt UF2 | Flip a magic byte: `failed: bad UF2 block magic` before anything is switched |
+| Too-small file | A few KB of junk: `failed: image too small (… bytes)` |
+| Display stays alive | During the download the rotation/MQTT keep running (no multi-second freeze); diagnostics keep publishing |
+| Message mid-download | Publish a `message` while downloading: it shows for its full duration, then progress returns — it must not flash for a single frame |
+| Buttons mid-download | Press either button while downloading: the IP/splash screens come up as usual, then progress returns |
+| Failure display window | A failure holds the matrix ~10 s (not ~15 s), then the rotation resumes |
+| Attributes | `$SIGN/ota/attributes` JSON tracks `progress`, `bytes_received`, `bytes_total`, `format`, `error` |
+| Non-dualbank board | On a board without `dualbank`: `failed: dualbank is not available on this board` |
+
 ## 4. Resilience and Negative Tests
 
 | ID | Scenario | Procedure | Expected |
@@ -447,6 +477,9 @@ With HA connected to the same broker and MQTT autodiscovery enabled:
 | HA8 | HA restart | Restart HA; entities come back (discovery configs retained or re-advertised) |
 | HA9 | Device Time | Setting the datetime entity updates the sign clock; state reflects the new time |
 | HA10 | Publish Data Store | Pressing the button publishes full store JSON to `$SIGN/data/state` |
+| HA11 | Firmware URL text | Setting it is echoed back on `$SIGN/ota/url` and survives a reboot (persisted) |
+| HA12 | Install Firmware button | Pressing it starts the download; **Firmware Update Status** tracks `downloading NN%` → `rebooting in Ns`, then the device goes unavailable and returns on the new build |
+| HA13 | Firmware URL is not a notify target | No notify entity is advertised for the firmware URL |
 
 ## 6. Regression Traceability — old HTTP tests → MQTT
 

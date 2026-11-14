@@ -50,21 +50,49 @@ class HomeAssistant:
         """Provide the module registry for collecting HA entity descriptors."""
         self._modules = modules
 
-    def _text_entities(self):
-        entities = {}
+    #: Entity components a module may declare through ``ha_entities()``.
+    COMPONENTS = ("text", "button", "sensor")
+
+    def _module_entities(self):
+        """Collect module-declared entities, resolving their MQTT topics.
+
+        A module names its endpoint and topic suffixes rather than full
+        topics, so the base topic stays in one place. Returns a dict of
+        component name -> {entity key: config}.
+        """
+        entities = {component: {} for component in HomeAssistant.COMPONENTS}
         if self._modules is None:
             return entities
+
         for module in self._modules.modules():
             for descriptor in module.ha_entities():
-                if descriptor.get("component") != "text":
+                component = descriptor.get("component")
+                if component not in entities:
                     continue
-                key = descriptor["key"]
-                config = descriptor["config"]
-                entities[key] = {
-                    "name": config["name"],
-                    "command_topic": f"{self._base_topic}/module/{config['endpoint']}",
-                    "icon": config.get("icon", "mdi:text"),
-                }
+                config = dict(descriptor["config"])
+
+                endpoint = config.pop("endpoint", None)
+                if endpoint is not None:
+                    config["command_topic"] = f"{self._base_topic}/module/{endpoint}"
+
+                for suffix_key, topic_key in (
+                    ("state_topic_suffix", "state_topic"),
+                    ("json_attributes_topic_suffix", "json_attributes_topic"),
+                ):
+                    suffix = config.pop(suffix_key, None)
+                    if suffix is not None:
+                        config[topic_key] = f"{self._base_topic}/{suffix}"
+
+                entities[component][descriptor["key"]] = config
+
+        return entities
+
+    def _text_entities(self):
+        entities = {}
+        for key, config in self._module_entities()["text"].items():
+            entry = dict(config)
+            entry.setdefault("icon", "mdi:text")
+            entities[key] = entry
         return entities
 
     def create_autodiscovery_config(
@@ -186,7 +214,14 @@ class HomeAssistant:
             },
         }
 
-        text_inputs = self._text_entities()
+        module_entities = self._module_entities()
+        text_inputs = {}
+        for text_key, text_config in module_entities["text"].items():
+            entry = dict(text_config)
+            entry.setdefault("icon", "mdi:text")
+            text_inputs[text_key] = entry
+
+        module_sensors = module_entities["sensor"]
 
         buttons = {
             "reboot": {
@@ -203,6 +238,12 @@ class HomeAssistant:
                 "entity_category": "diagnostic",
             },
         }
+
+        for button_key, button_config in module_entities["button"].items():
+            entry = dict(button_config)
+            entry.setdefault("payload_press", "press")
+            entry.setdefault("icon", "mdi:gesture-tap-button")
+            buttons[button_key] = entry
 
         switches = {
             "display": {
@@ -295,8 +336,16 @@ class HomeAssistant:
                 "payload_not_available": "offline",
                 "device": {"identifiers": [self._device_id]},
             }
+            for extra in ("state_topic", "entity_category", "max", "mode"):
+                if extra in text_config:
+                    payload[extra] = text_config[extra]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
+
+            # A text entity that isn't a message destination (a firmware URL,
+            # say) has no business showing up as a notify target.
+            if not text_config.get("notify", True):
+                continue
 
             # unique_id must be unique across the whole MQTT integration, so the
             # notify entity can't share the text entity's id
@@ -309,6 +358,32 @@ class HomeAssistant:
             autodiscovery_messages.append(
                 {"topic": topic_notify, "payload": notify_payload}
             )
+
+        for sensor_key, sensor_config in module_sensors.items():
+            topic = f"homeassistant/sensor/{self._device_id}/{sensor_key}/config"
+
+            payload = {
+                "name": sensor_config["name"],
+                "state_topic": sensor_config["state_topic"],
+                "icon": sensor_config.get("icon", "mdi:information-outline"),
+                "unique_id": f"{self._device_id}_{sensor_key}",
+                "availability_topic": self._availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "device": {"identifiers": [self._device_id]},
+            }
+            for extra in (
+                "json_attributes_topic",
+                "value_template",
+                "entity_category",
+                "device_class",
+                "state_class",
+                "unit_of_measurement",
+            ):
+                if extra in sensor_config:
+                    payload[extra] = sensor_config[extra]
+
+            autodiscovery_messages.append({"topic": topic, "payload": payload})
 
         for button_key, button_config in buttons.items():
             topic = f"homeassistant/button/{self._device_id}/{button_key}/config"
