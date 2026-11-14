@@ -108,7 +108,9 @@ class FlashWriter:
             if dualbank is None:
                 raise OTAError("dualbank not available on this board")
             flasher = dualbank.flash
-        flasher(bytes(data), self._offset)
+        # dualbank.flash() declares offset keyword-only, so it must be passed
+        # by name: positionally it raises TypeError on hardware.
+        flasher(bytes(data), offset=self._offset)
         self._offset += len(data)
 
     def write(self, data) -> None:
@@ -246,6 +248,9 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     STATE_SUFFIX = "ota/state"
     ATTRIBUTES_SUFFIX = "ota/attributes"
     URL_SUFFIX = "ota/url"
+
+    #: States worth taking over the display for.
+    ACTIVE_STATES = (STATE_DOWNLOADING, STATE_COUNTDOWN, STATE_FAILED)
 
     def __init__(self, app):
         super().__init__(app)
@@ -614,7 +619,14 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     # ------------------------------------------------------------------
 
     def wants_interrupt(self) -> bool:
-        return self._state in (STATE_DOWNLOADING, STATE_COUNTDOWN)
+        # Edge-triggered, like the other interrupt modules: the main loop asks
+        # every pass and re-enters the interrupt (rebuilding labels) whenever
+        # the answer is True, so claiming the display for the whole download
+        # would churn the heap and reset the countdown continuously. Ask only
+        # when there is new text to draw.
+        if self._state not in OTA.ACTIVE_STATES:
+            return False
+        return self._short_message() != self._shown_message
 
     def should_show(self) -> bool:
         return self._state != STATE_IDLE
@@ -651,8 +663,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         return True
 
     def loop(self) -> None:
-        # Rebuilding labels every pass of a multi-minute download would churn
-        # the heap for nothing; redraw only when the text actually changes.
+        # Same guard as wants_interrupt(): redraw only when the text changes,
+        # whichever path the main loop reaches this module through.
         if self._short_message() != self._shown_message:
             self.show()
 

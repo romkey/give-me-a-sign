@@ -135,7 +135,7 @@ class _App:
 def _fake_dualbank(monkeypatch):
     calls = SimpleNamespace(writes=[], switched=False)
 
-    def flash(buffer, offset=0):
+    def flash(buffer, *, offset=0):
         calls.writes.append((offset, bytes(buffer)))
 
     def switch():
@@ -233,7 +233,7 @@ def test_uf2_unwrapper_rejects_truncated_image():
 
 def test_flash_writer_aligns_blocks():
     writes = []
-    writer = FlashWriter(lambda buffer, offset: writes.append((offset, len(buffer))))
+    writer = FlashWriter(lambda buffer, *, offset: writes.append((offset, len(buffer))))
     writer.write(b"\x01" * (FLASH_BLOCK_SIZE + 10))
     assert writes == [(0, FLASH_BLOCK_SIZE)]
     assert writer.pending == 10
@@ -411,3 +411,45 @@ def test_progress_tracks_content_length(monkeypatch, fake_dualbank):
 
     _drain(ota)
     assert ota.progress == 100
+
+
+def test_interrupt_is_edge_triggered(monkeypatch, fake_dualbank):
+    """The main loop asks every pass; only new text may claim the display.
+
+    A level-triggered wants_interrupt() would have the rotation re-enter the
+    interrupt and rebuild labels on every pass of a multi-megabyte download.
+    """
+    image = b"\x33" * (MIN_IMAGE_BYTES * 4)
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
+
+    assert not ota.wants_interrupt()
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+    assert ota.wants_interrupt()
+
+    assert ota.show()
+    assert not ota.wants_interrupt()
+
+    # Pumping without the percentage moving must not ask for a redraw.
+    before = ota.status_message
+    ota.background()
+    if ota.status_message == before:
+        assert not ota.wants_interrupt()
+
+    # ... but once the text changes, it does, exactly once.
+    while ota.state == ota_module.STATE_DOWNLOADING and not ota.wants_interrupt():
+        ota.background()
+    assert ota.wants_interrupt()
+    ota.show()
+    assert not ota.wants_interrupt()
+
+
+def test_failure_is_shown_once_on_the_matrix(monkeypatch, fake_dualbank):
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(b"nope", status_code=404)))
+
+    ota.receive("ota_install", "https://example.invalid/missing.bin")
+
+    assert ota.state == ota_module.STATE_FAILED
+    assert ota.wants_interrupt()
+    ota.show()
+    assert not ota.wants_interrupt()
