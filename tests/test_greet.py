@@ -4,10 +4,12 @@
 
 """Unit tests for greet anonymization and validation."""
 
+import time
 from types import SimpleNamespace
 
 import pytest
 
+from give_me_a_sign import greet as greet_module
 from give_me_a_sign.greet import Greet
 from give_me_a_sign.module import ModuleStore
 
@@ -92,3 +94,49 @@ def test_greet_complication_renders_after_the_interrupt(greeter):
 def test_greet_complication_without_data(greeter):
     greet, _ = greeter
     assert greet.complications()[0].render() is None
+
+
+def test_greet_short_name_does_not_scroll(greeter):
+    greet, app = greeter
+    _publish_greet(greet, {"person": "John R."})
+    assert greet.show() is True
+
+    name = app._shown[1]
+    assert name.bounding_box[2] <= app.canvas_width
+    greet.loop()
+    assert name.x == 0
+
+
+def test_greet_long_name_scrolls_left(monkeypatch, greeter):
+    greet, app = greeter
+    _publish_greet(greet, {"person": "Bartholomew Fitzgerald"})
+    assert greet.show() is True
+
+    name = app._shown[1]
+    width = name.bounding_box[2]
+    assert width > app.canvas_width
+
+    now = [time.monotonic_ns()]
+    monkeypatch.setattr(greet_module.time, "monotonic_ns", lambda: now[0])
+
+    # The name holds at the left long enough to be read before it moves.
+    greet.loop()
+    assert name.x == 0
+
+    def step():
+        now[0] += Greet.SCROLL_HOLD_NS
+        greet.loop()
+
+    step()
+    assert name.x == -1
+
+    # It scrolls no further left than keeping the end of the name on screen.
+    min_x = app.canvas_width - width
+    while name.x > min_x:
+        step()
+        assert name.x >= min_x
+    assert name.x == min_x
+
+    # Having shown the end of the name, it starts over from the left.
+    step()
+    assert name.x == 0
