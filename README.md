@@ -292,7 +292,8 @@ topics under `MQTT_TOPIC_PREFIX` (default `givemeasign`):
 Supported `{endpoint}` values include `weather`, `message`, `greet`, `aqi`, `uv`,
 `pollen`, `forecast`, `lunar`, `tones`, `image`, `timezone`, `solar`, `trimet`,
 and `debug`. Payloads are JSON objects (plain text is accepted for `message` and
-`greet`).
+`greet`). A greeted name too wide for the display scrolls slowly to the left,
+pausing at each end, for as long as the greeting is on screen.
 
 Per-device command topics (under `{prefix}/sign/{mac}/`):
 
