@@ -13,3 +13,4 @@ adafruit_pcf8523
 adafruit_ntp
 adafruit_minimqtt
 adafruit_connection_manager
+adafruit_requests

@@ -62,6 +62,7 @@ from .aqi import AQI
 from .pollen import Pollen
 from .trimet import Trimet
 from .store_only import StoreOnly
+from .ota import OTA
 
 FREE_MEMORY_LIMIT = 10000
 GC_INTERVAL_NS = 5 * 1_000_000_000
@@ -83,6 +84,7 @@ BUILTIN_MODULES = (
     Pollen,
     Trimet,
     StoreOnly,
+    OTA,
 )
 
 

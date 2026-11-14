@@ -36,6 +36,8 @@ class Platform:
         self._ntp = None
         self._mqtt = None
         self._socket_pool = None
+        self._requests_session = None
+        self._requests_pool = None
         self._wifi_next_retry_at = 0
         self._wifi_backoff_s = WIFI_RETRY_MIN_S
         self._wifi_restored_flag = False
@@ -172,6 +174,40 @@ class Platform:
     def start_mqtt(self) -> None:
         """Start the MQTT client."""
         self._mqtt = SignMQTT(self._app, self)
+
+    @property
+    def mqtt_base_topic(self):
+        """The per-device MQTT topic base, or ``None`` before MQTT starts."""
+        if self._mqtt is None:
+            return None
+        return self._mqtt.base_topic
+
+    def mqtt_publish(self, topic, payload, retain=True, qos=1) -> bool:
+        """Publish *payload* to *topic*; False when MQTT isn't usable."""
+        if self._mqtt is None:
+            return False
+        return self._mqtt.publish(topic, payload, retain=retain, qos=qos)
+
+    def get_requests_session(self):
+        """
+        Return an ``adafruit_requests`` session for HTTP(S) downloads.
+
+        Built lazily and rebuilt whenever the socket pool changes, so a WiFi
+        reconnect doesn't leave a session pointing at a dead pool.
+        """
+        if not self.wifi_is_connected:
+            return None
+
+        # pylint: disable=import-outside-toplevel
+        import adafruit_connection_manager
+        import adafruit_requests
+
+        pool = adafruit_connection_manager.get_radio_socketpool(wifi.radio)
+        if self._requests_session is None or self._requests_pool is not pool:
+            ssl_context = adafruit_connection_manager.get_radio_ssl_context(wifi.radio)
+            self._requests_session = adafruit_requests.Session(pool, ssl_context)
+            self._requests_pool = pool
+        return self._requests_session
 
     @property
     def mqtt_is_connected(self) -> bool:

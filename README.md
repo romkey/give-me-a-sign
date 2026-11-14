@@ -237,7 +237,7 @@ Give Me A Sign uses a **module registry**. Each module:
 - May publish **complications** (fractional screen layouts) for composed screens
 
 Built-in modules: `clock`, `weather`, `aqi`, `uv`, `pollen`, `greet`, `message`,
-`image`, `tones`, and store-only endpoints (`debug`, `lunar`).
+`image`, `tones`, `ota`, and store-only endpoints (`debug`, `lunar`).
 
 ### External modules
 
@@ -302,6 +302,8 @@ Per-device command topics (under `{prefix}/sign/{mac}/`):
 | `display/set` | `ON` / `OFF` | Blank or show the matrix |
 | `time/set` | ISO 8601 UTC, epoch, or `{"epoch": …}` | Set the device RTC |
 | `data/publish` | any | Publish all module data stores to `data/state` |
+| `module/ota_url` | URL text or `{"url": …}` | Set the firmware image URL |
+| `module/ota_install` | `install`, or a URL | Download and install firmware |
 
 Home Assistant autodiscovery is built in when MQTT is configured. See
 `give_me_a_sign/home_assistant.py` for entity definitions.
@@ -328,8 +330,9 @@ https://github.com/adafruit/Adafruit_CircuitPython_Bitmap_Font
 
 Configure MQTT in `settings.toml` and set `SIGN_NAME` if you want a friendly
 device name in Home Assistant. The sign publishes MQTT autodiscovery configs
-for text entities, a display switch, a device-time datetime, reboot and
-publish-data buttons, and diagnostic sensors.
+for text entities, a display switch, a device-time datetime, reboot,
+publish-data and firmware-install buttons, and diagnostic sensors (including
+the firmware update status — see **Over-the-air firmware updates** below).
 
 Example — publish a message via MQTT (mosquitto_pub):
 
@@ -353,5 +356,59 @@ mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/data/publish' \
   -m publish
 # then: mosquitto_sub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/data/state' -C 1
 ```
+
+## Over-the-air firmware updates
+
+The `ota` module installs a new CircuitPython build over WiFi using the ESP32
+[`dualbank`](https://docs.circuitpython.org/en/latest/shared-bindings/dualbank/index.html)
+module, which writes the inactive half of a dual-OTA flash layout and then
+boots into it.
+
+Set the image URL, then press the button:
+
+```
+mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/module/ota_url' \
+  -m 'https://example.com/adafruit-circuitpython-matrixportal_s3-en_US-10.0.0.bin'
+mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/module/ota_install' \
+  -m install
+```
+
+`ota_install` also accepts a URL directly, which sets and installs in one step.
+
+In Home Assistant the module advertises three entities:
+
+| Entity | Type | Purpose |
+|--------|------|---------|
+| **Firmware URL** | text | The `.bin` or `.uf2` to fetch |
+| **Install Firmware** | button | Start the download and flash |
+| **Firmware Update Status** | sensor | `idle`, `downloading 42%`, `rebooting in 3s`, `failed: …` |
+
+The status sensor also carries JSON attributes (`state`, `progress`,
+`bytes_received`, `bytes_total`, `format`, `url`, `error`), published to
+`{prefix}/sign/{mac}/ota/attributes`.
+
+How it works:
+
+- The download runs a few KiB per pass of the main loop, so the display keeps
+  drawing and MQTT keeps flowing while the image comes down. Progress appears
+  on the matrix and in Home Assistant.
+- `.uf2` input is unwrapped as it streams: each 512-byte UF2 block's 32-byte
+  header and trailing magic are dropped and only the payload is flashed, in
+  target-address order. Raw `.bin` input is flashed as-is.
+- Writes are buffered into 4 KiB blocks to satisfy the ESP-IDF OTA writer.
+- When the image is fully written the sign calls `dualbank.switch()`, counts
+  down **5 seconds** on the display and on MQTT, and then resets into the new
+  firmware.
+- Anything that goes wrong — a bad URL, an HTTP error, a truncated or
+  implausibly small image, a UF2 with bad magic — leaves the current firmware
+  untouched and reports `failed: …` on the status sensor.
+
+**Use an application image, not a combined one.** `dualbank` writes a single
+OTA app partition, so the file must contain just the CircuitPython
+application — the `.bin` from a CircuitPython release, not a `-combined.bin`
+or a factory image that also carries a bootloader and partition table at
+absolute flash offsets. A `.uf2` works only when it holds an app-only image;
+the board must also be running a build whose partition table has two OTA
+slots.
 
 ## Timezones

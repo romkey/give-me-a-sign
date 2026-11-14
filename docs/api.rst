@@ -47,6 +47,9 @@ Networking
 .. automodule:: give_me_a_sign.ip
    :members:
 
+.. automodule:: give_me_a_sign.ota
+   :members:
+
 Display modules
 ---------------
 
