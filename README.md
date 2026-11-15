@@ -373,7 +373,16 @@ mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/module/ota_instal
   -m install
 ```
 
-`ota_install` also accepts a URL directly, which sets and installs in one step.
+`ota_install` also accepts a URL directly, which sets and installs in one
+step — handy as a one-shot that skips the URL entity entirely.
+
+**Committing the Firmware URL in Home Assistant.** A text entity sends its
+value when the field is committed — press **Enter** in the box. Typing a URL
+and clicking away leaves it on screen but unsent, and the sign will report
+`no firmware URL set` when the button is pressed. The sign publishes its own
+view of the URL (retained, empty string included), so the field shows what an
+install would actually use: if the box is empty after a moment, the sign has
+no URL stored, whatever was typed into it.
 
 In Home Assistant the module advertises three entities:
 
@@ -448,6 +457,7 @@ mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/fir
 | No `mqtt:rx` line | The payload never reached the sign: wrong base topic (check `MQTT_TOPIC_PREFIX` and the MAC), broker ACLs, or this build doesn't subscribe to the endpoint |
 | `mqtt:rx` but no `ota:` line | The endpoint is claimed by a different module — check the endpoint list for a collision |
 | `ota: … failed: …` | The update was attempted; the reason is on the line and on the status sensor |
+| `mqtt:rx module/ota_install` but never `module/ota_url` | The URL was typed into Home Assistant but not committed — press Enter in the field, or publish the URL to `module/ota_install` directly |
 
 Watch the status from the broker side with
 `mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.

@@ -64,6 +64,9 @@ FAILED_DISPLAY_S = 10
 #: Minimum plausible firmware image; anything shorter is a broken download.
 MIN_IMAGE_BYTES = 64 * 1024
 
+#: Distinguishes "never published" from "published as empty".
+_UNSET = object()
+
 STATE_IDLE = "idle"
 STATE_DOWNLOADING = "downloading"
 STATE_COUNTDOWN = "countdown"
@@ -274,6 +277,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._shown_message = None
         self._group = None
         self._failed_until_ns = 0
+        self._published_url = _UNSET
 
     # ------------------------------------------------------------------
     # MQTT entry points
@@ -370,7 +374,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         if url is None:
             url = self.url
         if url is None:
-            self._fail("no firmware URL set")
+            base = self._base_topic() or "<prefix>/sign/<mac>"
+            self._fail(f"no firmware URL set - publish one to {base}/module/ota_url")
             return False
 
         self._url = url
@@ -435,6 +440,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         return 0
 
     def background(self) -> None:
+        self._publish_url()
         if self._state == STATE_DOWNLOADING:
             self._pump()
         elif self._state == STATE_COUNTDOWN:
@@ -606,9 +612,19 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         return bool(publish(f"{base}/{suffix}", payload))
 
     def _publish_url(self) -> None:
+        """Mirror the stored URL to Home Assistant, including when it is empty.
+
+        A text entity whose state topic has never been published keeps
+        showing whatever was last typed into it, committed or not — so the
+        box can read like a URL is set while the sign has none. Publishing
+        the sign's own view, empty string included, makes the field agree
+        with what an install would actually use.
+        """
         url = self.url
-        if url:
-            self._publish(OTA.URL_SUFFIX, url)
+        if url == self._published_url:
+            return
+        if self._publish(OTA.URL_SUFFIX, url or ""):
+            self._published_url = url
 
     def _flush_status(self, force=False) -> None:
         if not self._status_dirty and not force:

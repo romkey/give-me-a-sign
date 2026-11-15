@@ -418,7 +418,9 @@ not valid here. Keep a known-good firmware and a USB cable handy.
 | `.bin` install | Matrix shows `firmware` + percent; `$SIGN/ota/state` counts up; `dualbank.switch()`, then `rebooting in 5s` … `1s`, then reset into the new build |
 | `.uf2` install | Same, with UF2 headers stripped — the installed build must run (check `circuitpython_version` in diagnostics afterward) |
 | URL on the install topic | Publishing a URL to `module/ota_install` sets and installs in one step |
-| No URL set | `failed: no firmware URL set`; nothing flashed |
+| No URL set | `failed: no firmware URL set - publish one to …/module/ota_url`; nothing flashed |
+| HA URL not committed | Type a URL in the **Firmware URL** field and click away without pressing Enter: no `mqtt:rx module/ota_url`, the field reverts to the sign's own (empty) value, and Install reports no URL set |
+| HA URL committed | Press Enter: `mqtt:rx module/ota_url`, `ota: url set to …`, and the field keeps the value across an HA restart (retained state) |
 | Bad URL / 404 | `failed: HTTP 404`; current firmware untouched; sign keeps running |
 | Truncated download | Pull the network mid-download: `failed: …`; sign keeps running; the old partition still boots |
 | Corrupt UF2 | Flip a magic byte: `failed: bad UF2 block magic` before anything is switched |

@@ -373,7 +373,9 @@ def test_install_without_url_fails(monkeypatch, fake_dualbank):
     ota.receive("ota_install", "install")
 
     assert ota.state == ota_module.STATE_FAILED
-    assert ota.status_message == "failed: no firmware URL set"
+    assert ota.status_message.startswith("failed: no firmware URL set")
+    # the message has to say how to fix it, not just that it is broken
+    assert "module/ota_url" in ota.status_message
     assert not fake_dualbank.switched
 
 
@@ -595,3 +597,33 @@ def test_url_set_and_state_changes_report(monkeypatch, fake_dualbank, capsys):
     out = capsys.readouterr().out
     assert "ota: downloading" in out
     assert "ota: countdown" in out
+
+
+def test_url_state_is_published_even_when_empty(monkeypatch):
+    """Home Assistant's text box shows uncommitted typing until the device
+    publishes its own view, so an empty URL has to be published too."""
+    ota, platform = _make_ota(monkeypatch)
+
+    ota.background()
+    urls = [
+        payload
+        for topic, payload, _, _ in platform.published
+        if topic.endswith("/ota/url")
+    ]
+    assert urls == [""]  # the sign has no URL, and says so
+
+    # Unchanged on later passes: no retained-message spam.
+    for _ in range(3):
+        ota.background()
+    assert len([t for t, _, _, _ in platform.published if t.endswith("/ota/url")]) == 1
+
+    ota.receive("ota_url", "https://example.invalid/firmware.bin")
+    urls = [
+        payload
+        for topic, payload, _, _ in platform.published
+        if topic.endswith("/ota/url")
+    ]
+    assert urls == ["", "https://example.invalid/firmware.bin"]
+
+    ota.background()
+    assert len([t for t, _, _, _ in platform.published if t.endswith("/ota/url")]) == 2
