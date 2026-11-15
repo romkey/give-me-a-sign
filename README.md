@@ -376,13 +376,28 @@ mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/module/ota_instal
 `ota_install` also accepts a URL directly, which sets and installs in one
 step — handy as a one-shot that skips the URL entity entirely.
 
-**Committing the Firmware URL in Home Assistant.** A text entity sends its
-value when the field is committed — press **Enter** in the box. Typing a URL
-and clicking away leaves it on screen but unsent, and the sign will report
-`no firmware URL set` when the button is pressed. The sign publishes its own
-view of the URL (retained, empty string included), so the field shows what an
-install would actually use: if the box is empty after a moment, the sign has
-no URL stored, whatever was typed into it.
+In Home Assistant the module advertises five entities:
+
+| Entity | Type | Purpose |
+|--------|------|---------|
+| **Firmware** | update | Native install button with progress, installed vs. latest version |
+| **Firmware URL** | text | The `.bin` or `.uf2` to fetch (device page, Configuration) |
+| **Firmware URL (controls)** | text | The same thing, in the main controls |
+| **Install Firmware** | button | Start the download and flash |
+| **Firmware Update Status** | sensor | `idle`, `downloading 42%`, `rebooting in 3s`, `failed: …` |
+
+**Why two URL fields.** A text entity only publishes when its value is
+committed, and some browsers do not commit the field rendered in the device
+page's **Configuration** block. **Firmware URL (controls)** is deliberately
+shaped exactly like the Message entity — no `entity_category`, so it lands in
+the main controls, and no `state_topic`, so Home Assistant is optimistic and
+keeps what was typed rather than waiting for the sign to echo it back. If the
+configuration field will not commit in your browser, use this one. Either may
+supply the URL; the configuration field wins when both hold one.
+
+The **Firmware** update entity needs no text field at all: it offers Install
+whenever the URL names a version different from the running build, and
+reports progress through Home Assistant's own update UI.
 
 In Home Assistant the module advertises three entities:
 
@@ -457,7 +472,7 @@ mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/fir
 | No `mqtt:rx` line | The payload never reached the sign: wrong base topic (check `MQTT_TOPIC_PREFIX` and the MAC), broker ACLs, or this build doesn't subscribe to the endpoint |
 | `mqtt:rx` but no `ota:` line | The endpoint is claimed by a different module — check the endpoint list for a collision |
 | `ota: … failed: …` | The update was attempted; the reason is on the line and on the status sensor |
-| `mqtt:rx module/ota_install` but never `module/ota_url` | The URL was typed into Home Assistant but not committed — press Enter in the field, or publish the URL to `module/ota_install` directly |
+| `mqtt:rx module/ota_install` but never `module/ota_url` | The URL never left Home Assistant: the field was not committed. Try **Firmware URL (controls)**, or publish the URL to `module/ota_install` directly |
 
 Watch the status from the broker side with
 `mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.

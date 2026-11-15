@@ -419,6 +419,9 @@ not valid here. Keep a known-good firmware and a USB cable handy.
 | `.uf2` install | Same, with UF2 headers stripped — the installed build must run (check `circuitpython_version` in diagnostics afterward) |
 | URL on the install topic | Publishing a URL to `module/ota_install` sets and installs in one step |
 | No URL set | `failed: no firmware URL set - publish one to …/module/ota_url`; nothing flashed |
+| Update entity | The **Firmware** update entity offers Install once a URL names a different version; it shows a progress bar during the download and no text field is needed |
+| Either URL field | A URL set through **Firmware URL (controls)** installs just as one set through **Firmware URL**; with both set, the configuration one is used |
+| Status cleared on boot | Fail an update, then reboot: the retained status reads `idle` again rather than the old failure |
 | HA URL not committed | Type a URL in the **Firmware URL** field and click away without pressing Enter: no `mqtt:rx module/ota_url`, the field reverts to the sign's own (empty) value, and Install reports no URL set |
 | HA URL committed | Press Enter: `mqtt:rx module/ota_url`, `ota: url set to …`, and the field keeps the value across an HA restart (retained state) |
 | Bad URL / 404 | `failed: HTTP 404`; current firmware untouched; sign keeps running |

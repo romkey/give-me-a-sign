@@ -121,6 +121,7 @@ def test_autodiscovery_includes_ota_entities(monkeypatch):
     app = SimpleNamespace()
     modules = ModuleRegistry(app)
     modules.register(OTA(app))
+    modules.register(Message(app))  # the shape the OTA controls entity copies
     base = "givemeasign/sign/aa_bb_cc_dd_ee_ff"
     ha = HomeAssistant("aa:bb:cc:dd:ee:ff", _DummyMQTT(), base)
     ha.set_modules(modules)
@@ -132,12 +133,30 @@ def test_autodiscovery_includes_ota_entities(monkeypatch):
     assert text["command_topic"] == f"{base}/module/ota_url"
     assert text["state_topic"] == f"{base}/ota/url"
     assert text["entity_category"] == "config"
+    # retained, so the broker redelivers the URL when the sign resubscribes
+    assert text["retain"] is True
     # a firmware URL is not a notification target
     assert f"homeassistant/notify/{device}/ota_url/config" not in configs
 
     button = configs[f"homeassistant/button/{device}/ota_install/config"]
     assert button["command_topic"] == f"{base}/module/ota_install"
     assert button["payload_press"] == "install"
+
+    # second URL entity, shaped exactly like the Message entity that works
+    main = configs[f"homeassistant/text/{device}/ota_url_main/config"]
+    assert main["command_topic"] == f"{base}/module/ota_url_main"
+    assert "entity_category" not in main  # lands in the main controls
+    assert "state_topic" not in main  # optimistic: keeps what was typed
+    message = configs[f"homeassistant/text/{device}/message/config"]
+    assert set(main) == set(message)
+    assert f"homeassistant/notify/{device}/ota_url_main/config" not in configs
+
+    update = configs[f"homeassistant/update/{device}/ota_update/config"]
+    assert update["command_topic"] == f"{base}/module/ota_install"
+    assert update["state_topic"] == f"{base}/ota/update"
+    assert update["payload_install"] == "install"
+    assert update["device_class"] == "firmware"
+    assert update["unique_id"] == f"{device}_ota_update"
 
     sensor = configs[f"homeassistant/sensor/{device}/ota_status/config"]
     assert sensor["state_topic"] == f"{base}/ota/state"

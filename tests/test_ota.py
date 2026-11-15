@@ -588,7 +588,7 @@ def test_url_set_and_state_changes_report(monkeypatch, fake_dualbank, capsys):
     ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
 
     ota.receive("ota_url", "https://example.invalid/firmware.bin")
-    assert "ota: url set to https://example.invalid/firmware.bin" in (
+    assert "ota: url set via ota_url to https://example.invalid/firmware.bin" in (
         capsys.readouterr().out
     )
 
@@ -627,3 +627,94 @@ def test_url_state_is_published_even_when_empty(monkeypatch):
 
     ota.background()
     assert len([t for t, _, _, _ in platform.published if t.endswith("/ota/url")]) == 2
+
+
+def test_either_url_entity_can_supply_the_url(monkeypatch):
+    """Two entities, so the one shaped like Message can be compared against
+    the one in the configuration section. Configuration wins if both are set.
+    """
+    ota, _ = _make_ota(monkeypatch)
+    assert ota.url is None
+
+    ota.receive("ota_url_main", "https://example.invalid/from-controls.bin")
+    assert ota.url == "https://example.invalid/from-controls.bin"
+
+    ota.receive("ota_url", "https://example.invalid/from-config.bin")
+    assert ota.url == "https://example.invalid/from-config.bin"
+
+
+def test_install_uses_whichever_url_entity_is_set(monkeypatch, fake_dualbank):
+    session = _Session(_Response(b"\x81" * (MIN_IMAGE_BYTES + 8)))
+    ota, _ = _make_ota(monkeypatch, session)
+
+    ota.receive("ota_url_main", "https://example.invalid/from-controls.bin")
+    ota.receive("ota_install", "install")
+    _drain(ota)
+
+    assert session.requested == "https://example.invalid/from-controls.bin"
+    assert fake_dualbank.switched
+
+
+def test_firmware_version_is_read_from_the_url():
+    from give_me_a_sign.ota import (  # pylint: disable=import-outside-toplevel
+        firmware_version_from_url,
+    )
+
+    assert (
+        firmware_version_from_url(
+            "https://downloads.circuitpython.org/bin/adafruit_matrixportal_s3/"
+            "en_US/adafruit-circuitpython-adafruit_matrixportal_s3-en_US-10.0.0.bin"
+        )
+        == "10.0.0"
+    )
+    assert firmware_version_from_url("http://h/firmware.uf2") == "firmware"
+    assert firmware_version_from_url("http://h/build-9.2.1-beta.bin") == "9.2.1"
+    assert firmware_version_from_url(None) is None
+
+
+def test_update_entity_offers_install_only_with_a_url(monkeypatch):
+    ota, platform = _make_ota(monkeypatch)
+
+    idle = ota.update_attributes()
+    assert idle["installed_version"] == idle["latest_version"]  # nothing to do
+    assert idle["in_progress"] is False
+    assert idle["update_percentage"] is None
+
+    ota.receive("ota_url", "https://example.invalid/fw-10.0.0.bin")
+    offered = ota.update_attributes()
+    assert offered["latest_version"] == "10.0.0"
+    assert offered["latest_version"] != offered["installed_version"]
+    assert offered["release_url"] == "https://example.invalid/fw-10.0.0.bin"
+
+    ota.background()
+    assert any(topic.endswith("/ota/update") for topic, _, _, _ in platform.published)
+
+
+def test_update_entity_reports_progress(monkeypatch, fake_dualbank):
+    image = b"\x55" * (MIN_IMAGE_BYTES * 3)
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
+
+    ota.receive("ota_install", "https://example.invalid/fw-10.0.0.bin")
+    ota.background()
+
+    progress = ota.update_attributes()
+    assert progress["in_progress"] is True
+    assert 0 < progress["update_percentage"] < 100
+
+
+def test_status_is_cleared_on_startup(monkeypatch):
+    """The status topic is retained, so a failure must not outlive a reboot."""
+    ota, platform = _make_ota(monkeypatch)
+
+    ota.background()
+    states = [p for t, p, _, _ in platform.published if t.endswith("/ota/state")]
+    assert states == ["idle"]
+
+    attributes = [
+        json.loads(p)
+        for t, p, _, _ in platform.published
+        if t.endswith("/ota/attributes")
+    ]
+    assert attributes[0]["error"] is None
+    assert attributes[0]["state"] == "idle"
+    assert attributes[0]["progress"] == 0

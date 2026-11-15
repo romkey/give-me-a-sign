@@ -19,6 +19,7 @@ payload bytes are flashed.
 
 import json
 import struct
+import sys
 import time
 
 import displayio
@@ -223,6 +224,28 @@ class UF2Unwrapper:
         self._blocks += 1
 
 
+def firmware_version_from_url(url):
+    """Best-effort version label from a firmware filename.
+
+    CircuitPython builds are named like
+    ``adafruit-circuitpython-<board>-<locale>-10.0.0.bin``, so the last
+    dash-separated piece that starts with a digit is the version. Anything
+    unrecognizable falls back to the bare filename, which still gives Home
+    Assistant something that differs from the installed version.
+    """
+    if not url:
+        return None
+    name = url.split("?")[0].rstrip("/").split("/")[-1]
+    for suffix in (".bin", ".uf2"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    for part in reversed(name.split("-")):
+        if part and part[0].isdigit():
+            return part
+    return name[:32] or None
+
+
 def looks_like_uf2(head) -> bool:
     """True when *head* (at least 8 bytes) starts with the UF2 magic words."""
     if len(head) < 8:
@@ -243,9 +266,10 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
 
     NAME = "ota"
     KEY_URL = "ota_url"
+    KEY_URL_MAIN = "ota_url_main"
     KEY_INSTALL = "ota_install"
-    ENDPOINTS = (KEY_URL, KEY_INSTALL)
-    PERSISTENT_KEYS = (KEY_URL,)
+    ENDPOINTS = (KEY_URL, KEY_URL_MAIN, KEY_INSTALL)
+    PERSISTENT_KEYS = (KEY_URL, KEY_URL_MAIN)
     IS_INTERRUPT = True
     ACTIVE_RENDER = "loop"
     DEFAULT_DURATION = 5
@@ -254,6 +278,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     STATE_SUFFIX = "ota/state"
     ATTRIBUTES_SUFFIX = "ota/attributes"
     URL_SUFFIX = "ota/url"
+    UPDATE_SUFFIX = "ota/update"
 
     def __init__(self, app):
         super().__init__(app)
@@ -261,7 +286,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._state = STATE_IDLE
         self._message = "idle"
         self._error = None
-        self._url = None
+        self._urls = {}
+        self._active_url = None
         self._response = None
         self._chunks = None
         self._writer = None
@@ -278,6 +304,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._group = None
         self._failed_until_ns = 0
         self._published_url = _UNSET
+        self._startup_status_sent = False
 
     # ------------------------------------------------------------------
     # MQTT entry points
@@ -291,24 +318,24 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._app.logger.info(f"module:ota:receive({endpoint})")
         print(f"ota: {endpoint} <- {raw!r}")
 
-        if endpoint == OTA.KEY_URL:
-            self._receive_url(raw)
+        if endpoint in (OTA.KEY_URL, OTA.KEY_URL_MAIN):
+            self._receive_url(endpoint, raw)
             return
         if endpoint == OTA.KEY_INSTALL:
             self._receive_install(raw)
             return
         self._app.logger.error(f"module:ota:receive unknown endpoint {endpoint}")
 
-    def _receive_url(self, raw) -> None:
+    def _receive_url(self, endpoint, raw) -> None:
         url = self._extract_url(raw)
         if url is None:
-            self._app.logger.error("module:ota:ota_url bad payload")
+            self._app.logger.error(f"module:ota:{endpoint} bad payload")
             return
-        self.store.set_item(OTA.KEY_URL, {"url": url})
-        self.store.clear_updated(OTA.KEY_URL)
-        self._url = url
+        self.store.set_item(endpoint, {"url": url})
+        self.store.clear_updated(endpoint)
+        self._urls[endpoint] = url
         self._app.logger.info(f"module:ota url set to {url}")
-        print(f"ota: url set to {url}")
+        print(f"ota: url set via {endpoint} to {url}")
         self._publish_url()
         if self._state in (STATE_IDLE, STATE_FAILED):
             self._set_state(STATE_IDLE, "idle", error=None)
@@ -337,14 +364,29 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
 
     @property
     def url(self):
-        """The firmware URL most recently set, or ``None``."""
-        if self._url is not None:
-            return self._url
-        stored = self.store.get_item(OTA.KEY_URL)
+        """The firmware URL to install, or ``None``.
+
+        Two entities can supply it, so that one shaped like the working
+        Message entity can be compared against one in Home Assistant's
+        configuration section. The configuration entity wins when both hold
+        a URL; otherwise whichever has one is used.
+        """
+        for key in (OTA.KEY_URL, OTA.KEY_URL_MAIN):
+            value = self._stored_url(key)
+            if value is not None:
+                return value
+        return None
+
+    def _stored_url(self, key):
+        """The URL held by one of the URL endpoints, or ``None``."""
+        cached = self._urls.get(key)
+        if cached:
+            return cached
+        stored = self.store.get_item(key)
         if isinstance(stored, dict):
             value = stored.get("url")
             if isinstance(value, str) and value:
-                self._url = value
+                self._urls[key] = value
                 return value
         return None
 
@@ -378,8 +420,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             self._fail(f"no firmware URL set - publish one to {base}/module/ota_url")
             return False
 
-        self._url = url
         self._reset_transfer()
+        self._active_url = url
 
         try:
             self._open_stream(url)
@@ -445,6 +487,15 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             self._pump()
         elif self._state == STATE_COUNTDOWN:
             self._countdown()
+
+        # The status topic is retained, so a failure from before a reboot
+        # would otherwise sit in Home Assistant looking current. Overwrite
+        # it with this boot's idle state as soon as MQTT can carry it.
+        if not self._startup_status_sent:
+            if self._flush_status(force=True):
+                self._startup_status_sent = True
+            return
+
         self._flush_status()
 
     def _pump(self) -> None:
@@ -591,7 +642,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         return {
             "state": self._state,
             "message": self._message,
-            "url": self.url,
+            "url": self._active_url or self.url,
             "format": self._format,
             "progress": self.progress,
             "bytes_received": self._received,
@@ -626,9 +677,10 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         if self._publish(OTA.URL_SUFFIX, url or ""):
             self._published_url = url
 
-    def _flush_status(self, force=False) -> None:
+    def _flush_status(self, force=False) -> bool:
+        """Publish status, attributes and update state. True if they went out."""
         if not self._status_dirty and not force:
-            return
+            return False
 
         now = time.monotonic_ns()
         # Throttle only the progress chatter; countdown ticks and final
@@ -638,13 +690,45 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             and self._state == STATE_DOWNLOADING
             and now < self._next_status_ns
         ):
-            return
+            return False
 
         if not self._publish(OTA.STATE_SUFFIX, self._message[:255]):
-            return
+            return False
         self._publish(OTA.ATTRIBUTES_SUFFIX, json.dumps(self.status_attributes()))
+        self._publish(OTA.UPDATE_SUFFIX, json.dumps(self.update_attributes()))
         self._status_dirty = False
         self._next_status_ns = now + 1_000_000_000
+        return True
+
+    @staticmethod
+    def _installed_version() -> str:
+        """The running CircuitPython version, for the update entity."""
+        try:
+            return ".".join(str(part) for part in sys.implementation.version)
+        except (AttributeError, TypeError):  # pragma: no cover - defensive
+            return "unknown"
+
+    def update_attributes(self) -> dict:
+        """State for Home Assistant's update entity.
+
+        Home Assistant offers Install when latest differs from installed, so
+        with no URL set the two match and the entity reads as up to date.
+        """
+        installed = self._installed_version()
+        url = self._active_url or self.url
+        payload = {
+            "installed_version": installed,
+            "latest_version": firmware_version_from_url(url) or installed,
+            "title": "CircuitPython firmware",
+            "in_progress": self._state in (STATE_DOWNLOADING, STATE_COUNTDOWN),
+        }
+        if self._state == STATE_DOWNLOADING and self._total:
+            payload["update_percentage"] = self.progress
+        else:
+            payload["update_percentage"] = None
+        if url:
+            payload["release_url"] = url
+        return payload
 
     # ------------------------------------------------------------------
     # display
@@ -754,6 +838,36 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
                     "entity_category": "config",
                     "max": 255,
                     "notify": False,
+                    # Retained: the broker redelivers the URL when the sign
+                    # resubscribes, so it survives a reboot without needing
+                    # the /data.json write that USB mass storage blocks.
+                    "retain": True,
+                },
+            },
+            {
+                # Deliberately shaped exactly like the Message entity, which
+                # commits reliably: no entity_category (so it lands in the
+                # main controls rather than the device page's configuration
+                # block), and no state_topic (so Home Assistant is optimistic
+                # and keeps what was typed instead of waiting for an echo).
+                "component": "text",
+                "key": "ota_url_main",
+                "config": {
+                    "name": "Firmware URL (controls)",
+                    "endpoint": OTA.KEY_URL_MAIN,
+                    "icon": "mdi:link-variant",
+                    "notify": False,
+                },
+            },
+            {
+                "component": "update",
+                "key": "ota_update",
+                "config": {
+                    "name": "Firmware",
+                    "endpoint": OTA.KEY_INSTALL,
+                    "state_topic_suffix": OTA.UPDATE_SUFFIX,
+                    "payload_install": "install",
+                    "device_class": "firmware",
                 },
             },
             {
