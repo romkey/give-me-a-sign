@@ -138,12 +138,21 @@ class SignMQTT:  # pylint: disable=too-many-instance-attributes
             self._data_publish_topic, self._on_publish_data_command
         )
 
+        # Print what we actually listen to: an entity visible in Home
+        # Assistant proves only that a discovery config was published once
+        # (they are retained), not that this build still claims the endpoint.
+        print(f"MQTT base topic: {self._ha_sign_base}")
+        print("MQTT module endpoints: " + ", ".join(sorted(self._subscribed_endpoints)))
+
     def _dispatch(self, endpoint, message):
+        raw = self._decode_mqtt_payload(message)
+        # Unconditional: without it there is no way to tell a payload that
+        # never arrived from one a module quietly ignored.
+        print(f"mqtt:rx module/{endpoint} ({len(raw)} bytes)")
         module = self._app.modules.by_endpoint(endpoint)
         if module is None:
             self._app.logger.error(f"mqtt: no module for endpoint {endpoint}")
             return
-        raw = self._decode_mqtt_payload(message)
         module.receive(endpoint, raw)
 
     def _mqtt_connect_and_subscribe(self):

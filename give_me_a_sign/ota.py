@@ -280,6 +280,13 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
     # ------------------------------------------------------------------
 
     def receive(self, endpoint, raw) -> None:
+        # This overrides the base receive(), which is what logs
+        # "module:<name>:receive(<endpoint>)" for every other module, so say
+        # so here too — an update that reports nothing is indistinguishable
+        # from one whose payload never arrived.
+        self._app.logger.info(f"module:ota:receive({endpoint})")
+        print(f"ota: {endpoint} <- {raw!r}")
+
         if endpoint == OTA.KEY_URL:
             self._receive_url(raw)
             return
@@ -297,6 +304,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self.store.clear_updated(OTA.KEY_URL)
         self._url = url
         self._app.logger.info(f"module:ota url set to {url}")
+        print(f"ota: url set to {url}")
         self._publish_url()
         if self._state in (STATE_IDLE, STATE_FAILED):
             self._set_state(STATE_IDLE, "idle", error=None)
@@ -306,6 +314,9 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         url = self._extract_url(raw)
         if url is None:
             url = self.url
+            print(f"ota: install requested, using stored url {url!r}")
+        else:
+            print(f"ota: install requested with url {url!r}")
         self.start_update(url)
 
     @staticmethod
@@ -562,6 +573,8 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             self._set_state(STATE_DOWNLOADING, message, error=self._error)
 
     def _set_state(self, state, message, error) -> None:
+        if message != self._message or state != self._state:
+            print(f"ota: {state} - {message}")
         self._state = state
         self._message = message
         self._error = error

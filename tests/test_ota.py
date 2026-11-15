@@ -565,3 +565,33 @@ def test_failure_lease_matches_its_window(monkeypatch, fake_dualbank):
     # A download, by contrast, keeps the ordinary lease.
     ota._state = ota_module.STATE_DOWNLOADING
     assert ota.duration() == OTA.DEFAULT_DURATION
+
+
+def test_every_install_request_reports_on_the_console(monkeypatch, capsys):
+    """Silence is the one unacceptable outcome: the module overrides the base
+    receive(), so it has to say what arrived and what it decided itself."""
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(b"")))
+
+    ota.receive("ota_install", "install")
+    out = capsys.readouterr().out
+
+    assert "ota: ota_install <-" in out  # the payload arrived
+    assert "install requested" in out  # and what it resolved to
+    assert "no firmware URL set" in out  # and why it stopped
+    assert ota._app.logger.infos  # base-style receive line, as other modules
+
+
+def test_url_set_and_state_changes_report(monkeypatch, fake_dualbank, capsys):
+    image = b"\x21" * (MIN_IMAGE_BYTES + 64)
+    ota, _ = _make_ota(monkeypatch, _Session(_Response(image)))
+
+    ota.receive("ota_url", "https://example.invalid/firmware.bin")
+    assert "ota: url set to https://example.invalid/firmware.bin" in (
+        capsys.readouterr().out
+    )
+
+    ota.receive("ota_install", "install")
+    _drain(ota)
+    out = capsys.readouterr().out
+    assert "ota: downloading" in out
+    assert "ota: countdown" in out

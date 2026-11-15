@@ -407,6 +407,51 @@ How it works:
   implausibly small image, a UF2 with bad magic — leaves the current firmware
   untouched and reports `failed: …` on the status sensor.
 
+### Troubleshooting an update that does nothing
+
+On the serial console the sign reports each step. At MQTT connect it prints
+the topics it actually listens to:
+
+```
+MQTT base topic: givemeasign/sign/aa_bb_cc_dd_ee_ff
+MQTT module endpoints: aqi, greet, image, message, ota_install, ota_url, ...
+```
+
+If `ota_install` and `ota_url` are missing from that list, the running build
+does not have the OTA module — and the Home Assistant entities prove nothing
+either way, because discovery configs are published **retained**, so they
+survive in the broker (and in Home Assistant) long after the build that
+published them is gone.
+
+Then, when a payload arrives, every endpoint prints a receive line before any
+module logic runs:
+
+```
+mqtt:rx module/ota_install (7 bytes)
+ota: ota_install <- 'install'
+ota: install requested, using stored url 'https://example.com/firmware.bin'
+ota: downloading - downloading 0%
+ota: downloading - downloading 14%
+ota: countdown - rebooting in 5s
+```
+
+To isolate the sign from Home Assistant, publish straight to it — this is the
+same thing the button does:
+
+```bash
+SIGN=givemeasign/sign/aa_bb_cc_dd_ee_ff
+mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/firmware.bin'
+```
+
+| What you see | What it means |
+|---|---|
+| No `mqtt:rx` line | The payload never reached the sign: wrong base topic (check `MQTT_TOPIC_PREFIX` and the MAC), broker ACLs, or this build doesn't subscribe to the endpoint |
+| `mqtt:rx` but no `ota:` line | The endpoint is claimed by a different module — check the endpoint list for a collision |
+| `ota: … failed: …` | The update was attempted; the reason is on the line and on the status sensor |
+
+Watch the status from the broker side with
+`mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.
+
 **Use an application image, not a combined one.** `dualbank` writes a single
 OTA app partition, so the file must contain just the CircuitPython
 application — the `.bin` from a CircuitPython release, not a `-combined.bin`
