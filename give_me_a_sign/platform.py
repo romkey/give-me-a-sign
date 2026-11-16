@@ -196,17 +196,26 @@ class Platform:
         reconnect doesn't leave a session pointing at a dead pool.
         """
         if not self.wifi_is_connected:
+            print("platform: no HTTP session - wifi is not connected")
             return None
 
         # pylint: disable=import-outside-toplevel
-        import adafruit_connection_manager
-        import adafruit_requests
+        try:
+            import adafruit_connection_manager
+            import adafruit_requests
+        except ImportError as error:
+            raise RuntimeError(
+                f"{error}; install adafruit_requests and "
+                "adafruit_connection_manager in /lib (circup install "
+                "adafruit_requests)"
+            ) from error
 
         pool = adafruit_connection_manager.get_radio_socketpool(wifi.radio)
         if self._requests_session is None or self._requests_pool is not pool:
             ssl_context = adafruit_connection_manager.get_radio_ssl_context(wifi.radio)
             self._requests_session = adafruit_requests.Session(pool, ssl_context)
             self._requests_pool = pool
+            print("platform: built an HTTP session for downloads")
         return self._requests_session
 
     @property

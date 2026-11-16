@@ -348,6 +348,11 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             print(f"ota: install requested, using stored url {url!r}")
         else:
             print(f"ota: install requested with url {url!r}")
+        platform = getattr(self._app, "platform", None)
+        print(
+            f"ota: wifi connected={getattr(platform, 'wifi_is_connected', None)} "
+            f"dualbank={'yes' if dualbank is not None else 'no'}"
+        )
         self.start_update(url)
 
     @staticmethod
@@ -450,10 +455,20 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         if dualbank is None:
             raise OTAError("dualbank is not available on this board")
 
-        session = getattr(self._app.platform, "get_requests_session", None)
-        session = session() if session is not None else None
+        platform = getattr(self._app, "platform", None)
+        getter = getattr(platform, "get_requests_session", None)
+        if getter is None:
+            raise OTAError(
+                "platform cannot make HTTP requests - stale give_me_a_sign install?"
+            )
+        try:
+            session = getter()
+        except OTAError:
+            raise
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            raise OTAError(f"no HTTP session: {error}") from error
         if session is None:
-            raise OTAError("no network session available")
+            raise OTAError("no HTTP session: wifi is not connected")
 
         self._app.logger.info(f"module:ota downloading {url}")
         response = session.get(url, stream=True)

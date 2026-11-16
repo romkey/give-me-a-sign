@@ -98,6 +98,7 @@ class _Platform:
         self.session = session
         self.published = []
         self.mqtt_base_topic = "givemeasign/sign/aa_bb"
+        self.wifi_is_connected = True
 
     def get_requests_session(self):
         return self.session
@@ -718,3 +719,43 @@ def test_status_is_cleared_on_startup(monkeypatch):
     assert attributes[0]["error"] is None
     assert attributes[0]["state"] == "idle"
     assert attributes[0]["progress"] == 0
+
+
+def test_start_update_reports_wifi_down(monkeypatch, fake_dualbank):
+    """A None session means WiFi, not a mystery: say which."""
+    # pylint: disable=unused-argument
+    ota, platform = _make_ota(monkeypatch, session=None)
+    platform.wifi_is_connected = False
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+
+    assert ota.state == ota_module.STATE_FAILED
+    assert "wifi is not connected" in ota.status_message
+
+
+def test_start_update_reports_stale_platform(monkeypatch, fake_dualbank):
+    """An install without get_requests_session is a half-updated library."""
+    # pylint: disable=unused-argument
+    ota, _platform = _make_ota(monkeypatch, session=None)
+    monkeypatch.delattr(_Platform, "get_requests_session")
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+
+    assert ota.state == ota_module.STATE_FAILED
+    assert "stale give_me_a_sign install" in ota.status_message
+
+
+def test_start_update_surfaces_session_error(monkeypatch, fake_dualbank):
+    """A missing adafruit_requests should name itself in the status."""
+    # pylint: disable=unused-argument
+    ota, _platform = _make_ota(monkeypatch, session=None)
+
+    def boom(self):  # pylint: disable=unused-argument
+        raise RuntimeError("no module named 'adafruit_requests'")
+
+    monkeypatch.setattr(_Platform, "get_requests_session", boom)
+
+    ota.receive("ota_install", "https://example.invalid/firmware.bin")
+
+    assert ota.state == ota_module.STATE_FAILED
+    assert "adafruit_requests" in ota.status_message

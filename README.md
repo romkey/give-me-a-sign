@@ -473,6 +473,9 @@ mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/fir
 | `mqtt:rx` but no `ota:` line | The endpoint is claimed by a different module — check the endpoint list for a collision |
 | `ota: … failed: …` | The update was attempted; the reason is on the line and on the status sensor |
 | `mqtt:rx module/ota_install` but never `module/ota_url` | The URL never left Home Assistant: the field was not committed. Try **Firmware URL (controls)**, or publish the URL to `module/ota_install` directly |
+| `failed: no HTTP session: no module named 'adafruit_requests'` | `adafruit_requests` and `adafruit_connection_manager` are not in `/lib`: `circup install adafruit_requests adafruit_connection_manager` |
+| `failed: no HTTP session: wifi is not connected` | The radio was down when the download started; the sign retries nothing by itself, so press Install again once WiFi is back |
+| `failed: platform cannot make HTTP requests - stale give_me_a_sign install?` | `ota.py` is newer than `platform.py` on the board — copy the whole `give_me_a_sign` package, not just the new file |
 
 Watch the status from the broker side with
 `mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.
