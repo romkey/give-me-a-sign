@@ -185,10 +185,11 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         else:
             print(f"ota: install requested with url {url!r}")
         platform = getattr(self._app, "platform", None)
-        print(
-            f"ota: wifi connected={getattr(platform, 'wifi_is_connected', None)} "
-            f"dualbank={'yes' if dualbank is not None else 'no'}"
-        )
+        # Both halves held a quoted expression, and mpy-cross rejects two such
+        # f-strings concatenated: one f-string, values worked out first.
+        connected = getattr(platform, "wifi_is_connected", None)
+        have_dualbank = "yes" if dualbank is not None else "no"
+        print(f"ota: wifi connected={connected} dualbank={have_dualbank}")
         self.start_update(url)
 
     @staticmethod
