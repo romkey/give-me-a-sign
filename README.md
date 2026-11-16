@@ -374,7 +374,31 @@ mosquitto_pub -h broker -t 'givemeasign/sign/aa_bb_cc_dd_ee_ff/module/ota_instal
   -m install
 ```
 
-`ota_install` also accepts a URL directly, which sets and installs in one step.
+`ota_install` also accepts a URL directly, which sets and installs in one
+step — handy as a one-shot that skips the URL entity entirely.
+
+In Home Assistant the module advertises five entities:
+
+| Entity | Type | Purpose |
+|--------|------|---------|
+| **Firmware** | update | Native install button with progress, installed vs. latest version |
+| **Firmware URL** | text | The `.bin` or `.uf2` to fetch (device page, Configuration) |
+| **Firmware URL (controls)** | text | The same thing, in the main controls |
+| **Install Firmware** | button | Start the download and flash |
+| **Firmware Update Status** | sensor | `idle`, `downloading 42%`, `rebooting in 3s`, `failed: …` |
+
+**Why two URL fields.** A text entity only publishes when its value is
+committed, and some browsers do not commit the field rendered in the device
+page's **Configuration** block. **Firmware URL (controls)** is deliberately
+shaped exactly like the Message entity — no `entity_category`, so it lands in
+the main controls, and no `state_topic`, so Home Assistant is optimistic and
+keeps what was typed rather than waiting for the sign to echo it back. If the
+configuration field will not commit in your browser, use this one. Either may
+supply the URL; the configuration field wins when both hold one.
+
+The **Firmware** update entity needs no text field at all: it offers Install
+whenever the URL names a version different from the running build, and
+reports progress through Home Assistant's own update UI.
 
 In Home Assistant the module advertises three entities:
 
@@ -408,12 +432,74 @@ How it works:
   implausibly small image, a UF2 with bad magic — leaves the current firmware
   untouched and reports `failed: …` on the status sensor.
 
-**Use an application image, not a combined one.** `dualbank` writes a single
-OTA app partition, so the file must contain just the CircuitPython
-application — the `.bin` from a CircuitPython release, not a `-combined.bin`
-or a factory image that also carries a bootloader and partition table at
-absolute flash offsets. A `.uf2` works only when it holds an app-only image;
-the board must also be running a build whose partition table has two OTA
-slots.
+### Troubleshooting an update that does nothing
+
+On the serial console the sign reports each step. At MQTT connect it prints
+the topics it actually listens to:
+
+```
+MQTT base topic: givemeasign/sign/aa_bb_cc_dd_ee_ff
+MQTT module endpoints: aqi, greet, image, message, ota_install, ota_url, ...
+```
+
+If `ota_install` and `ota_url` are missing from that list, the running build
+does not have the OTA module — and the Home Assistant entities prove nothing
+either way, because discovery configs are published **retained**, so they
+survive in the broker (and in Home Assistant) long after the build that
+published them is gone.
+
+Then, when a payload arrives, every endpoint prints a receive line before any
+module logic runs:
+
+```
+mqtt:rx module/ota_install (7 bytes)
+ota: ota_install <- 'install'
+ota: install requested, using stored url 'https://example.com/firmware.bin'
+ota: downloading - downloading 0%
+ota: downloading - downloading 14%
+ota: countdown - rebooting in 5s
+```
+
+To isolate the sign from Home Assistant, publish straight to it — this is the
+same thing the button does:
+
+```bash
+SIGN=givemeasign/sign/aa_bb_cc_dd_ee_ff
+mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/firmware.bin'
+```
+
+| What you see | What it means |
+|---|---|
+| No `mqtt:rx` line | The payload never reached the sign: wrong base topic (check `MQTT_TOPIC_PREFIX` and the MAC), broker ACLs, or this build doesn't subscribe to the endpoint |
+| `mqtt:rx` but no `ota:` line | The endpoint is claimed by a different module — check the endpoint list for a collision |
+| `ota: … failed: …` | The update was attempted; the reason is on the line and on the status sensor |
+| `mqtt:rx module/ota_install` but never `module/ota_url` | The URL never left Home Assistant: the field was not committed. Try **Firmware URL (controls)**, or publish the URL to `module/ota_install` directly |
+| `failed: no HTTP session: no module named 'adafruit_requests'` | `adafruit_requests` and `adafruit_connection_manager` are not in `/lib`: `circup install adafruit_requests adafruit_connection_manager` |
+| `failed: no HTTP session: wifi is not connected` | The radio was down when the download started; the sign retries nothing by itself, so press Install again once WiFi is back |
+| `failed: platform cannot make HTTP requests - stale give_me_a_sign install?` | `ota.py` is newer than `platform.py` on the board — copy the whole `give_me_a_sign` package, not just the new file |
+
+Watch the status from the broker side with
+`mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.
+
+**Either CircuitPython artifact for the board works — `.bin` or `.uf2`.**
+They are not the same shape, so the sign handles both:
+
+* The **`.bin`** is a whole-flash image: second-stage bootloader at offset 0,
+  partition table at 0x8000, then the application. `dualbank` writes an app
+  partition, so flashing those bytes as they come would put a bootloader
+  where an app belongs. The sign reads the embedded partition table, takes
+  the first app slot's offset and length (0x10000, 2 MiB on a MatrixPortal
+  S3) and flashes the application from there.
+* The **`.uf2`** addresses its blocks from 0 *within* the app partition, so
+  once the UF2 headers are off it is already an app-only image and passes
+  through unchanged.
+
+Both paths produce the same bytes — verified against
+`adafruit-circuitpython-adafruit_matrixportal_s3-en_US-11.0.0-alpha.3`, where
+each yields the same 1,973,024-byte application. A file that does not begin
+with the ESP image magic `0xE9` — an HTML error page, say — is rejected
+before anything is written.
+
+The board must be running a build whose partition table has two OTA slots.
 
 ## Timezones

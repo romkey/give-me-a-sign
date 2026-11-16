@@ -43,6 +43,7 @@ from adafruit_debouncer import Button
 import adafruit_logging as Logger
 import adafruit_display_text.label
 
+from ._version import __version__
 from .platform import Platform
 from ._paths import ASSETS_DIR
 from .config import load_config
@@ -176,7 +177,24 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
 
     def _register_builtins(self):
         for module_cls in BUILTIN_MODULES:
-            self.modules.register(module_cls(self))
+            # register() returns False on a duplicate NAME or endpoint, which
+            # used to be visible only as a log line: a module missing from the
+            # registry answers no MQTT and draws nothing, so say it loudly.
+            if not self.modules.register(module_cls(self)):
+                print(f"module: FAILED to register {module_cls.__name__}")
+
+    def _print_banner(self):
+        """Say which build this is and what it registered.
+
+        Home Assistant entities are published retained, so they outlive the
+        build that advertised them; a CIRCUITPY drive can also hold a stale
+        copy of the package that shadows the installed one. Printing the
+        version, the file this class was imported from, and the modules that
+        registered makes "which code is actually running" answerable from the
+        console instead of by inference.
+        """
+        print(f"give_me_a_sign {__version__} from {globals().get('__file__', '?')}")
+        print("modules: " + ", ".join(module.NAME for module in self.modules.modules()))
 
     def start(self):
         """Bring the sign up: splash, WiFi, clock sync, and module setup."""
@@ -204,6 +222,7 @@ class GiveMeASign:  # pylint: disable=too-many-instance-attributes
         external = discover_lib_modules() + self._config["modules"]
         self.modules.load_external(external)
         self._composer = Composer(self)
+        self._print_banner()
 
         self._platform.start_mqtt()
         self._resume_rotation()

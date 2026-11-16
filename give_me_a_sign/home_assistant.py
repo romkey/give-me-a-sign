@@ -51,7 +51,7 @@ class HomeAssistant:
         self._modules = modules
 
     #: Entity components a module may declare through ``ha_entities()``.
-    COMPONENTS = ("text", "button", "sensor")
+    COMPONENTS = ("text", "button", "sensor", "update")
 
     def _module_entities(self):
         """Collect module-declared entities, resolving their MQTT topics.
@@ -336,7 +336,15 @@ class HomeAssistant:
                 "payload_not_available": "offline",
                 "device": {"identifiers": [self._device_id]},
             }
-            for extra in ("state_topic", "entity_category", "max", "mode"):
+            for extra in (
+                "state_topic",
+                "entity_category",
+                "max",
+                "min",
+                "mode",
+                "pattern",
+                "retain",
+            ):
                 if extra in text_config:
                     payload[extra] = text_config[extra]
 
@@ -382,6 +390,30 @@ class HomeAssistant:
             ):
                 if extra in sensor_config:
                     payload[extra] = sensor_config[extra]
+
+            autodiscovery_messages.append({"topic": topic, "payload": payload})
+
+        for update_key, update_config in module_entities["update"].items():
+            topic = f"homeassistant/update/{self._device_id}/{update_key}/config"
+
+            payload = {
+                "name": update_config["name"],
+                "state_topic": update_config["state_topic"],
+                "command_topic": update_config["command_topic"],
+                "unique_id": f"{self._device_id}_{update_key}",
+                "availability_topic": self._availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "device": {"identifiers": [self._device_id]},
+            }
+            for extra in (
+                "payload_install",
+                "device_class",
+                "icon",
+                "entity_category",
+            ):
+                if extra in update_config:
+                    payload[extra] = update_config[extra]
 
             autodiscovery_messages.append({"topic": topic, "payload": payload})
 

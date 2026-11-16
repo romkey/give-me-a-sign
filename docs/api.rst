@@ -50,6 +50,9 @@ Networking
 .. automodule:: give_me_a_sign.ota
    :members:
 
+.. automodule:: give_me_a_sign.firmware_image
+   :members:
+
 Display modules
 ---------------
 
