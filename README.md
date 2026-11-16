@@ -480,12 +480,16 @@ mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/fir
 Watch the status from the broker side with
 `mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.
 
-**Use an application image, not a combined one.** `dualbank` writes a single
-OTA app partition, so the file must contain just the CircuitPython
-application — the `.bin` from a CircuitPython release, not a `-combined.bin`
-or a factory image that also carries a bootloader and partition table at
-absolute flash offsets. A `.uf2` works only when it holds an app-only image;
-the board must also be running a build whose partition table has two OTA
-slots.
+**Any CircuitPython artifact for the board works — `.bin` or `.uf2`.**
+Both files on `downloads.circuitpython.org` are whole-flash images: the
+second-stage bootloader at offset 0, the partition table at 0x8000, then the
+application. `dualbank` writes only an app partition, so the sign reads that
+embedded partition table, finds the first app slot (0x10000 on a MatrixPortal
+S3) and flashes the application from there, discarding the bootloader ahead of
+it. An already app-only image is passed through unchanged. A file that does
+not begin with the ESP image magic `0xE9` — an HTML error page, say — is
+rejected before anything is written.
+
+The board must be running a build whose partition table has two OTA slots.
 
 ## Timezones

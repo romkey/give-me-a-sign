@@ -409,9 +409,9 @@ mosquitto_sub -h $BROKER -t "$SIGN/ota/#" -v &
 mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m install
 ```
 
-Use an **app-only** image: `dualbank` writes one OTA partition, so a
-combined/factory image (bootloader + partition table at absolute offsets) is
-not valid here. Keep a known-good firmware and a USB cable handy.
+Either artifact from `downloads.circuitpython.org` works: both are
+whole-flash images, and the updater pulls the app out of them using their
+embedded partition table. Keep a known-good firmware and a USB cable handy.
 
 | Case | Expected |
 |------|----------|
@@ -424,6 +424,8 @@ not valid here. Keep a known-good firmware and a USB cable handy.
 | Status cleared on boot | Fail an update, then reboot: the retained status reads `idle` again rather than the old failure |
 | HA URL not committed | Type a URL in the **Firmware URL** field and click away without pressing Enter: no `mqtt:rx module/ota_url`, the field reverts to the sign's own (empty) value, and Install reports no URL set |
 | HA URL committed | Press Enter: `mqtt:rx module/ota_url`, `ota: url set to …`, and the field keeps the value across an HA restart (retained state) |
+| Whole-flash image | A release `.bin` or `.uf2` logs `whole-flash image, app taken from 0x00010000` and the flashed byte count is the app size (~1.9 MB), not the file size |
+| Not a firmware file | Point the URL at an HTML page: `failed: not an ESP32 firmware image (first byte 0x3c)`; nothing flashed |
 | Bad URL / 404 | `failed: HTTP 404`; current firmware untouched; sign keeps running |
 | Truncated download | Pull the network mid-download: `failed: …`; sign keeps running; the old partition still boots |
 | Corrupt UF2 | Flip a magic byte: `failed: bad UF2 block magic` before anything is switched |

@@ -10,15 +10,15 @@ Downloads a CircuitPython firmware image (``.bin`` or ``.uf2``) over HTTP(S)
 and writes it to the inactive OTA partition with the ESP32 ``dualbank``
 module, then reboots into it after a short countdown.
 
-UF2 files are unwrapped as they stream past: each 512-byte UF2 block carries
-a 32-byte header and a trailing magic word around its payload, and only the
-payload bytes are flashed.
+The image plumbing lives in :mod:`give_me_a_sign.firmware_image`: UF2
+unwrapping, pulling the application out of a whole-flash image, and the
+aligned writes ``dualbank`` wants. This module is the state machine around
+it - the MQTT endpoints, the matrix screen and the reboot countdown.
 
 * Author: John Romkey
 """
 
 import json
-import struct
 import sys
 import time
 
@@ -28,6 +28,13 @@ import microcontroller
 from adafruit_display_text.label import Label
 
 from .complication import FULL, Complication
+from .firmware_image import (
+    AppImageFilter,
+    FlashWriter,
+    OTAError,
+    UF2Unwrapper,
+    looks_like_uf2,
+)
 from .module import SignModule
 
 try:
@@ -35,20 +42,6 @@ try:
 except ImportError:  # pragma: no cover - only on boards without dualbank
     dualbank = None
 
-UF2_MAGIC_START0 = 0x0A324655
-UF2_MAGIC_START1 = 0x9E5D5157
-UF2_MAGIC_END = 0x0AB16F30
-UF2_BLOCK_SIZE = 512
-UF2_HEADER_SIZE = 32
-UF2_DATA_SIZE = 476
-
-#: Block is not meant for the main flash area (skip it).
-UF2_FLAG_NOT_MAIN_FLASH = 0x00000001
-#: Block is part of a file container, not a firmware image (skip it).
-UF2_FLAG_FILE_CONTAINER = 0x00001000
-
-#: esp_ota_write() wants 4 KiB-aligned writes, so buffer up to a flash page.
-FLASH_BLOCK_SIZE = 4096
 
 #: Bytes pulled from the socket per ``iter_content`` step.
 CHUNK_SIZE = 2048
@@ -74,156 +67,6 @@ STATE_COUNTDOWN = "countdown"
 STATE_FAILED = "failed"
 
 
-class OTAError(Exception):
-    """Raised inside the updater when an image can't be downloaded or flashed."""
-
-
-class FlashWriter:
-    """
-    Buffers a byte stream and hands it to ``dualbank`` in aligned blocks.
-
-    ``dualbank.flash()`` writes at an offset into the inactive OTA partition;
-    the ESP-IDF OTA writer wants those offsets to land on flash-page
-    boundaries, so bytes are accumulated until a full block is available.
-    """
-
-    def __init__(self, flasher=None, block_size=FLASH_BLOCK_SIZE):
-        """Create a writer.
-
-        Args:
-            flasher: callable ``f(buffer, offset)``; defaults to ``dualbank.flash``
-            block_size (int): bytes to accumulate before each flash write
-        """
-        self._flasher = flasher
-        self._block_size = block_size
-        self._buffer = bytearray()
-        self._offset = 0
-
-    @property
-    def bytes_written(self) -> int:
-        """Total bytes handed to ``dualbank`` so far."""
-        return self._offset
-
-    @property
-    def pending(self) -> int:
-        """Bytes buffered but not yet flashed."""
-        return len(self._buffer)
-
-    def _flash(self, data) -> None:
-        flasher = self._flasher
-        if flasher is None:
-            if dualbank is None:
-                raise OTAError("dualbank not available on this board")
-            flasher = dualbank.flash
-        # dualbank.flash() declares offset keyword-only, so it must be passed
-        # by name: positionally it raises TypeError on hardware.
-        flasher(bytes(data), offset=self._offset)
-        self._offset += len(data)
-
-    def write(self, data) -> None:
-        """Buffer *data*, flashing every whole block it completes."""
-        if not data:
-            return
-        self._buffer.extend(data)
-        size = self._block_size
-        while len(self._buffer) >= size:
-            self._flash(self._buffer[:size])
-            del self._buffer[:size]
-
-    def finish(self) -> int:
-        """Flash whatever is left over and return the total byte count."""
-        if self._buffer:
-            self._flash(self._buffer)
-            self._buffer = bytearray()
-        return self._offset
-
-
-class UF2Unwrapper:
-    """
-    Strips UF2 block headers from a stream, passing payloads to a sink.
-
-    Blocks arrive in whatever sized pieces the socket produces, so partial
-    blocks are held until the full 512 bytes are in hand. Payloads are
-    written in target-address order; a gap between two blocks is filled with
-    ``0xFF`` so the image stays positionally correct.
-    """
-
-    def __init__(self, sink):
-        """Create an unwrapper that calls ``sink(bytes)`` with payload data."""
-        self._sink = sink
-        self._tail = bytearray()
-        self._base_address = None
-        self._next_address = None
-        self._blocks = 0
-
-    @property
-    def blocks(self) -> int:
-        """Number of UF2 blocks whose payload was written."""
-        return self._blocks
-
-    @property
-    def base_address(self):
-        """Target address of the first flashed block, or ``None``."""
-        return self._base_address
-
-    def feed(self, data) -> None:
-        """Consume *data*, emitting the payload of every complete block."""
-        if data:
-            self._tail.extend(data)
-        while len(self._tail) >= UF2_BLOCK_SIZE:
-            block = bytes(self._tail[:UF2_BLOCK_SIZE])
-            del self._tail[:UF2_BLOCK_SIZE]
-            self._block(block)
-
-    def finish(self) -> None:
-        """Assert the stream ended on a block boundary."""
-        if self._tail:
-            raise OTAError(f"UF2 image truncated: {len(self._tail)} trailing bytes")
-        if self._blocks == 0:
-            raise OTAError("UF2 image contained no flashable blocks")
-
-    def _block(self, block) -> None:
-        (
-            magic0,
-            magic1,
-            flags,
-            target_address,
-            payload_size,
-            _block_no,
-            _num_blocks,
-            _file_size,
-        ) = struct.unpack_from("<8I", block, 0)
-        (magic_end,) = struct.unpack_from("<I", block, UF2_BLOCK_SIZE - 4)
-
-        if (
-            magic0 != UF2_MAGIC_START0
-            or magic1 != UF2_MAGIC_START1
-            or magic_end != UF2_MAGIC_END
-        ):
-            raise OTAError("bad UF2 block magic")
-
-        if flags & (UF2_FLAG_NOT_MAIN_FLASH | UF2_FLAG_FILE_CONTAINER):
-            return
-
-        if payload_size > UF2_DATA_SIZE:
-            raise OTAError(f"bad UF2 payload size {payload_size}")
-
-        if self._base_address is None:
-            self._base_address = target_address
-            self._next_address = target_address
-        elif target_address < self._next_address:
-            raise OTAError("UF2 blocks are out of order")
-        elif target_address > self._next_address:
-            gap = target_address - self._next_address
-            self._sink(b"\xff" * gap)
-            self._next_address = target_address
-
-        payload = block[UF2_HEADER_SIZE : UF2_HEADER_SIZE + payload_size]
-        self._sink(payload)
-        self._next_address += payload_size
-        self._blocks += 1
-
-
 def firmware_version_from_url(url):
     """Best-effort version label from a firmware filename.
 
@@ -244,14 +87,6 @@ def firmware_version_from_url(url):
         if part and part[0].isdigit():
             return part
     return name[:32] or None
-
-
-def looks_like_uf2(head) -> bool:
-    """True when *head* (at least 8 bytes) starts with the UF2 magic words."""
-    if len(head) < 8:
-        return False
-    magic0, magic1 = struct.unpack_from("<2I", head, 0)
-    return magic0 == UF2_MAGIC_START0 and magic1 == UF2_MAGIC_START1
 
 
 class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
@@ -292,6 +127,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._chunks = None
         self._writer = None
         self._unwrapper = None
+        self._filter = None
         self._head = bytearray()
         self._format = None
         self._received = 0
@@ -445,6 +281,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._chunks = None
         self._writer = None
         self._unwrapper = None
+        self._filter = None
         self._head = bytearray()
         self._format = None
         self._received = 0
@@ -550,9 +387,10 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
                 return
             chunk = bytes(self._head)
             self._head = bytearray()
+            self._filter = AppImageFilter(self._writer.write)
             if looks_like_uf2(chunk):
                 self._format = "uf2"
-                self._unwrapper = UF2Unwrapper(self._writer.write)
+                self._unwrapper = UF2Unwrapper(self._filter.feed)
             else:
                 self._format = "bin"
             self._app.logger.info(f"module:ota image format {self._format}")
@@ -560,7 +398,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         if self._format == "uf2":
             self._unwrapper.feed(chunk)
         else:
-            self._writer.write(chunk)
+            self._filter.feed(chunk)
 
     def _finish_download(self) -> None:
         try:
@@ -569,6 +407,12 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
             if self._format == "uf2":
                 self._unwrapper.feed(b"")
                 self._unwrapper.finish()
+            self._filter.finish()
+            if self._filter.whole_flash:
+                self._app.logger.info(
+                    "module:ota whole-flash image, app taken from "
+                    f"{self._filter.app_offset:#08x}"
+                )
             written = self._writer.finish()
             if written < MIN_IMAGE_BYTES:
                 raise OTAError(f"image too small ({written} bytes)")
@@ -623,6 +467,7 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         self._chunks = None
         self._writer = None
         self._unwrapper = None
+        self._filter = None
         self._set_state(STATE_FAILED, f"failed: {reason}", error=reason)
 
     # ------------------------------------------------------------------
