@@ -480,15 +480,24 @@ mosquitto_pub -h $BROKER -t $SIGN/module/ota_install -m 'https://example.com/fir
 Watch the status from the broker side with
 `mosquitto_sub -h $BROKER -v -t "$SIGN/ota/#"`.
 
-**Any CircuitPython artifact for the board works — `.bin` or `.uf2`.**
-Both files on `downloads.circuitpython.org` are whole-flash images: the
-second-stage bootloader at offset 0, the partition table at 0x8000, then the
-application. `dualbank` writes only an app partition, so the sign reads that
-embedded partition table, finds the first app slot (0x10000 on a MatrixPortal
-S3) and flashes the application from there, discarding the bootloader ahead of
-it. An already app-only image is passed through unchanged. A file that does
-not begin with the ESP image magic `0xE9` — an HTML error page, say — is
-rejected before anything is written.
+**Either CircuitPython artifact for the board works — `.bin` or `.uf2`.**
+They are not the same shape, so the sign handles both:
+
+* The **`.bin`** is a whole-flash image: second-stage bootloader at offset 0,
+  partition table at 0x8000, then the application. `dualbank` writes an app
+  partition, so flashing those bytes as they come would put a bootloader
+  where an app belongs. The sign reads the embedded partition table, takes
+  the first app slot's offset and length (0x10000, 2 MiB on a MatrixPortal
+  S3) and flashes the application from there.
+* The **`.uf2`** addresses its blocks from 0 *within* the app partition, so
+  once the UF2 headers are off it is already an app-only image and passes
+  through unchanged.
+
+Both paths produce the same bytes — verified against
+`adafruit-circuitpython-adafruit_matrixportal_s3-en_US-11.0.0-alpha.3`, where
+each yields the same 1,973,024-byte application. A file that does not begin
+with the ESP image magic `0xE9` — an HTML error page, say — is rejected
+before anything is written.
 
 The board must be running a build whose partition table has two OTA slots.
 
