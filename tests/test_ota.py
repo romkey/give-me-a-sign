@@ -711,3 +711,42 @@ def test_download_strips_an_app_only_uf2(monkeypatch, fake_dualbank):
     assert ota.state == ota_module.STATE_COUNTDOWN, ota.status_message
     flashed = b"".join(data for _offset, data in fake_dualbank.writes)
     assert flashed == app
+
+
+def test_a_new_url_replaces_the_failed_attempt(monkeypatch, fake_dualbank):
+    """A failed install must not keep advertising its own version.
+
+    _active_url outlived the attempt, and both the status sensor and the
+    update entity preferred it over the stored URL, so after a 404 the
+    Firmware entity went on offering the version from the bad URL however
+    many times the user corrected the field.
+    """
+    ota, _platform = _make_ota(monkeypatch, _Session(_Response(b"nope", 404)))
+
+    ota.receive("ota_install", "https://example.invalid/fw-9.9.9.bin")
+    assert ota.state == ota_module.STATE_FAILED
+    assert ota.update_attributes()["latest_version"] == "9.9.9"
+
+    ota.receive("ota_url", "https://example.invalid/fw-10.0.0.bin")
+
+    assert ota.state == ota_module.STATE_IDLE
+    assert ota.update_attributes()["latest_version"] == "10.0.0"
+    assert (
+        ota.update_attributes()["release_url"]
+        == "https://example.invalid/fw-10.0.0.bin"
+    )
+    assert ota.status_attributes()["url"] == "https://example.invalid/fw-10.0.0.bin"
+
+
+def test_a_running_download_keeps_its_own_url(monkeypatch, fake_dualbank):
+    """...but a URL set mid-download must not rewrite what is installing."""
+    image = app_image(b"\x42" * (MIN_IMAGE_BYTES * 2))
+    ota, _platform = _make_ota(monkeypatch, _Session(_Response(image)))
+
+    ota.receive("ota_install", "https://example.invalid/fw-10.0.0.bin")
+    assert ota.state == ota_module.STATE_DOWNLOADING
+
+    ota.receive("ota_url", "https://example.invalid/fw-11.0.0.bin")
+
+    assert ota.state == ota_module.STATE_DOWNLOADING
+    assert ota.update_attributes()["latest_version"] == "10.0.0"

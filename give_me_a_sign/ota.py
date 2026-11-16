@@ -174,6 +174,10 @@ class OTA(SignModule):  # pylint: disable=too-many-instance-attributes
         print(f"ota: url set via {endpoint} to {url}")
         self._publish_url()
         if self._state in (STATE_IDLE, STATE_FAILED):
+            # The last attempt's URL is what the sensor and the update entity
+            # describe; once a new one is set it describes nothing current, so
+            # forget it rather than keep advertising its version.
+            self._active_url = None
             self._set_state(STATE_IDLE, "idle", error=None)
 
     def _receive_install(self, raw) -> None:
